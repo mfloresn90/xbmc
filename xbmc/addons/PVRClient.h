@@ -34,7 +34,6 @@ namespace PVR
 {
   class CPVRChannelGroups;
   class CPVRTimersContainer;
-  struct EpgEventStateChange;
 
   typedef std::vector<PVR_MENUHOOK> PVR_MENUHOOKS;
 
@@ -892,13 +891,6 @@ namespace PVR
     static void WriteClientChannelInfo(const CPVRChannelPtr &xbmcChannel, PVR_CHANNEL &addonChannel);
 
     /*!
-     * @brief Copy over epg info from CPVREpgInfoTag to EPG_TAG.
-     * @param kodiTag The epg tag on Kodi's side.
-     * @param addonTag The epg tag on the addon's side.
-     */
-    static void WriteEpgTag(const CConstPVREpgInfoTagPtr &kodiTag, EPG_TAG &addonTag);
-
-    /*!
      * @brief Whether a channel can be played by this add-on
      * @param channel The channel to check.
      * @return True when it can be played, false otherwise.
@@ -1051,8 +1043,6 @@ namespace PVR
      * Returns the ffmpeg codec id from given ffmpeg codec string name
      */
     static xbmc_codec_t cb_get_codec_by_name(const void* kodiInstance, const char* strCodecName);
-
-    static void UpdateEpgEvent(const EpgEventStateChange &ch, bool bQueued);
     //@}
 
     bool                   m_bReadyToUse;          /*!< true if this add-on is initialised (ADDON_Create returned true), false otherwise */

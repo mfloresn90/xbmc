@@ -23,9 +23,11 @@
 #include <cmath>
 
 #include "FileItem.h"
-#include "settings/AdvancedSettings.h"
+#include "ServiceBroker.h"
+#include "settings/Settings.h"
 #include "utils/Variant.h"
 
+#include "pvr/PVRManager.h"
 #include "pvr/channels/PVRChannel.h"
 #include "pvr/epg/EpgInfoTag.h"
 
@@ -114,13 +116,13 @@ void CGUIEPGGridContainerModel::Refresh(const std::unique_ptr<CFileItemList> &it
   if (gridStart >= gridEnd)
   {
     // default to start "now minus GRID_START_PADDING minutes" and end "start plus one page".
-    m_gridStart = CDateTime::GetCurrentDateTime().GetAsUTCDateTime() - CDateTimeSpan(0, 0, GetGridStartPadding(), 0);
+    m_gridStart = CDateTime::GetUTCDateTime() - CDateTimeSpan(0, 0, GetGridStartPadding(), 0);
     m_gridEnd = m_gridStart + CDateTimeSpan(0, 0, iBlocksPerPage * MINSPERBLOCK, 0);
   }
-  else if (gridStart > (CDateTime::GetCurrentDateTime().GetAsUTCDateTime() - CDateTimeSpan(0, 0, GetGridStartPadding(), 0)))
+  else if (gridStart > (CDateTime::GetUTCDateTime() - CDateTimeSpan(0, 0, GetGridStartPadding(), 0)))
   {
     // adjust to start "now minus GRID_START_PADDING minutes".
-    m_gridStart = CDateTime::GetCurrentDateTime().GetAsUTCDateTime() - CDateTimeSpan(0, 0, GetGridStartPadding(), 0);
+    m_gridStart = CDateTime::GetUTCDateTime() - CDateTimeSpan(0, 0, GetGridStartPadding(), 0);
     m_gridEnd = gridEnd;
   }
   else
@@ -325,10 +327,10 @@ void CGUIEPGGridContainerModel::FindChannelAndBlockIndex(int channelUid, unsigne
 
 unsigned int CGUIEPGGridContainerModel::GetGridStartPadding() const
 {
-  unsigned int iEpgLingerTime = g_advancedSettings.m_iEpgLingerTime;
+  unsigned int iPastMinutes = CServiceBroker::GetPVRManager().EpgContainer().GetPastDaysToDisplay() * 24 * 60;
 
-  if (iEpgLingerTime < GRID_START_PADDING)
-    return iEpgLingerTime;
+  if (iPastMinutes < GRID_START_PADDING)
+    return iPastMinutes;
 
   return GRID_START_PADDING; // minutes
 }
@@ -425,11 +427,41 @@ void CGUIEPGGridContainerModel::FreeItemsMemory()
     ruler->FreeMemory();
 }
 
-int CGUIEPGGridContainerModel::GetFirstEventBlock(const CDateTime &eventStart) const
+unsigned int CGUIEPGGridContainerModel::GetPageNowOffset() const
 {
-  int diff = (eventStart - m_gridStart).GetSecondsTotal();
-  if (diff <= 0)
-    return -1;
+  return GetGridStartPadding() / MINSPERBLOCK; // this is the 'now' block relative to page start
+}
+
+int CGUIEPGGridContainerModel::GetBlock(const CDateTime &datetime) const
+{
+  int diff;
+
+  if (m_gridStart == datetime)
+    return 0; // block is at grid start
+  else if (m_gridStart > datetime)
+    diff = -1 * (m_gridStart - datetime).GetSecondsTotal(); // block is before grid start
+  else
+    diff = (datetime - m_gridStart).GetSecondsTotal(); // block is after grid start
+
+  return diff / 60 / MINSPERBLOCK;
+}
+
+int CGUIEPGGridContainerModel::GetNowBlock() const
+{
+  return GetBlock(CDateTime::GetUTCDateTime()) - GetPageNowOffset();
+}
+
+int CGUIEPGGridContainerModel::GetFirstEventBlock(const CPVREpgInfoTagPtr event) const
+{
+  const CDateTime eventStart = event->StartAsUTC();
+  int diff;
+
+  if (m_gridStart == eventStart)
+    return 0; // block is at grid start
+  else if (m_gridStart > eventStart)
+    diff = -1 * (m_gridStart - eventStart).GetSecondsTotal();
+  else
+    diff = (eventStart - m_gridStart).GetSecondsTotal();
 
   // First block of a tag is always the block calculated using event's start time, rounded up.
   // Refer to CGUIEPGGridContainerModel::Refresh, where the model is created, for details!
@@ -437,14 +469,9 @@ int CGUIEPGGridContainerModel::GetFirstEventBlock(const CDateTime &eventStart) c
   return std::ceil(fBlockIndex);
 }
 
-int CGUIEPGGridContainerModel::GetLastEventBlock(const CDateTime &eventEnd) const
+int CGUIEPGGridContainerModel::GetLastEventBlock(const CPVREpgInfoTagPtr event) const
 {
-  int diff = (eventEnd - m_gridStart).GetSecondsTotal();
-  if (diff <= 0)
-    return -1;
-
   // Last block of a tag is always the block calculated using event's end time, not rounded up.
   // Refer to CGUIEPGGridContainerModel::Refresh, where the model is created, for details!
-  int iBlockIndex = diff / 60 / MINSPERBLOCK;
-  return iBlockIndex;
+  return GetBlock(event->EndAsUTC());
 }
