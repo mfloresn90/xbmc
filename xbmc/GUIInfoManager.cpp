@@ -6207,7 +6207,7 @@ std::string CGUIInfoManager::GetLabel(int info, int contextWindow, std::string *
   case VIDEOPLAYER_VIDEO_ASPECT:
     if (g_application.m_pPlayer->IsPlaying())
     {
-      strLabel = CStreamDetails::VideoAspectToAspectDescription(m_videoInfo.videoAspectRatio);
+      strLabel = CStreamDetails::VideoAspectToAspectDescription(CServiceBroker::GetDataCacheCore().GetVideoDAR());
     }
     break;
   case VIDEOPLAYER_AUDIO_CHANNELS:
@@ -7314,7 +7314,8 @@ bool CGUIInfoManager::GetBool(int condition1, int contextWindow, const CGUIListI
       bReturn = (CServiceBroker::GetSettings().GetInt(CSettings::SETTING_VIDEOPLAYER_RENDERMETHOD) == RENDER_OVERLAYS);
     break;
     case VIDEOPLAYER_ISFULLSCREEN:
-      bReturn = g_windowManager.GetActiveWindow() == WINDOW_FULLSCREEN_VIDEO;
+      bReturn = g_windowManager.GetActiveWindow() == WINDOW_FULLSCREEN_VIDEO ||
+                g_windowManager.GetActiveWindow() == WINDOW_FULLSCREEN_GAME;
     break;
     case VIDEOPLAYER_HASMENU:
       bReturn = g_application.m_pPlayer->HasMenu();
