@@ -2,7 +2,7 @@
 
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -31,4 +31,5 @@ public:
   void FrameMove() override;
 private:
   unsigned int m_lastPercent = ~0U;
+  unsigned int m_lastEpgEventPercent = ~0U;
 };

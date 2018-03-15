@@ -21,13 +21,17 @@
 #include <ppl.h>
 #include <ppltasks.h>
 
-#include "utils/log.h"
-#include "utils/win32/gpu_memcpy_sse4.h"
-#include "utils/CPUInfo.h"
-#include "utils/win32/memcpy_sse2.h"
-#include "windowing/WindowingFactory.h"
-#include "WinRenderer.h"
 #include "WinRenderBuffer.h"
+#include "cores/VideoPlayer/VideoRenderers/RenderFlags.h"
+#include "cores/VideoPlayer/VideoRenderers/WinRenderer.h"
+#include "rendering/dx/DeviceResources.h"
+#include "rendering/dx/RenderContext.h"
+#include "utils/log.h"
+#if defined(HAVE_SSE2)
+#include "utils/win32/gpu_memcpy_sse4.h"
+#endif
+#include "utils/win32/memcpy_sse2.h"
+#include "utils/CPUInfo.h"
 
 #define PLANE_Y 0
 #define PLANE_U 1
@@ -35,12 +39,17 @@
 #define PLANE_UV 1
 #define PLANE_D3D11 0
 
+using namespace Microsoft::WRL;
+
 CRenderBuffer::CRenderBuffer()
   : loaded(false)
   , frameIdx(0)
-  , flags(0)
   , format(BUFFER_FMT_NONE)
   , videoBuffer(nullptr)
+  , primaries(AVCOL_PRI_UNSPECIFIED)
+  , color_space(AVCOL_SPC_BT709)
+  , full_range(false)
+  , bits(8)
   , m_locked(false)
   , m_bPending(false)
   , m_soft(false)
@@ -62,8 +71,13 @@ CRenderBuffer::~CRenderBuffer()
 
 void CRenderBuffer::Release()
 {
-  SAFE_RELEASE(videoBuffer);
-  SAFE_RELEASE(m_staging);
+  loaded = false;
+  if (videoBuffer)
+  {
+    videoBuffer->Release();
+    videoBuffer = nullptr;
+  }
+  m_staging.Reset();
   for (unsigned i = 0; i < m_activePlanes; i++)
   {
     // unlock before release
@@ -129,7 +143,7 @@ void CRenderBuffer::Clear() const
     wmemset(static_cast<wchar_t*>(m_rects[PLANE_U].pData), 0x200, m_rects[PLANE_U].RowPitch * (m_heightTex >> 1) >> 1);
     wmemset(static_cast<wchar_t*>(m_rects[PLANE_V].pData), 0x200, m_rects[PLANE_V].RowPitch * (m_heightTex >> 1) >> 1);
     break;
-  case BUFFER_FMT_YUV420P16: 
+  case BUFFER_FMT_YUV420P16:
     wmemset(static_cast<wchar_t*>(m_rects[PLANE_Y].pData),      0, m_rects[PLANE_Y].RowPitch * m_heightTex >> 1);
     wmemset(static_cast<wchar_t*>(m_rects[PLANE_U].pData), 0x8000, m_rects[PLANE_U].RowPitch * (m_heightTex >> 1) >> 1);
     wmemset(static_cast<wchar_t*>(m_rects[PLANE_V].pData), 0x8000, m_rects[PLANE_V].RowPitch * (m_heightTex >> 1) >> 1);
@@ -154,7 +168,7 @@ void CRenderBuffer::Clear() const
     wmemset(uvData, 0x200, m_rects[PLANE_D3D11].RowPitch * (m_heightTex >> 1) >> 1);
     break;
   }
-  case BUFFER_FMT_D3D11_P016: 
+  case BUFFER_FMT_D3D11_P016:
   {
     wchar_t* uvData = static_cast<wchar_t*>(m_rects[PLANE_D3D11].pData) + m_rects[PLANE_D3D11].RowPitch * (m_heightTex >> 1);
     wmemset(static_cast<wchar_t*>(m_rects[PLANE_D3D11].pData), 0, m_rects[PLANE_D3D11].RowPitch * m_heightTex >> 1);
@@ -217,7 +231,7 @@ bool CRenderBuffer::CreateBuffer(EBufferFormat fmt, unsigned width, unsigned hei
   {
     DXGI_FORMAT uvFormat = DXGI_FORMAT_R8G8_UNORM;
     // FL 9.x doesn't support DXGI_FORMAT_R8G8_UNORM, so we have to use SNORM and correct values in shader
-    if (!g_Windowing.IsFormatSupport(uvFormat, D3D11_FORMAT_SUPPORT_TEXTURE2D))
+    if (!DX::Windowing().IsFormatSupport(uvFormat, D3D11_FORMAT_SUPPORT_TEXTURE2D))
       uvFormat = DXGI_FORMAT_R8G8_SNORM;
     if ( !m_textures[PLANE_Y].Create(m_widthTex,       m_heightTex,      1, usage, DXGI_FORMAT_R8_UNORM)
       || !m_textures[PLANE_UV].Create(m_widthTex >> 1, m_heightTex >> 1, 1, usage, uvFormat))
@@ -319,6 +333,28 @@ bool CRenderBuffer::UploadBuffer()
   return loaded;
 }
 
+void CRenderBuffer::AppendPicture(const VideoPicture & picture)
+{
+  videoBuffer = picture.videoBuffer;
+  videoBuffer->Acquire();
+
+  primaries = static_cast<AVColorPrimaries>(picture.color_primaries);
+  color_space = static_cast<AVColorSpace>(picture.color_space);
+  color_transfer = static_cast<AVColorTransferCharacteristic>(picture.color_transfer);
+  full_range = picture.color_range == 1;
+  bits = picture.colorBits;
+
+  hasDisplayMetadata = picture.hasDisplayMetadata;
+  displayMetadata = picture.displayMetadata;
+  lightMetadata = picture.lightMetadata;
+  if (picture.hasLightMetadata && picture.lightMetadata.MaxCLL)
+    hasLightMetadata = true;
+
+  if (picture.videoBuffer->GetFormat() == AV_PIX_FMT_D3D11VA_VLD)
+    QueueCopyBuffer();
+  loaded = false;
+}
+
 ID3D11View* CRenderBuffer::GetView(unsigned idx)
 {
   switch (format)
@@ -409,7 +445,7 @@ void CRenderBuffer::QueueCopyBuffer()
   if (videoBuffer->GetFormat() == AV_PIX_FMT_D3D11VA_VLD && format < BUFFER_FMT_D3D11_BYPASS)
   {
     DXVA::CDXVAOutputBuffer *buf = static_cast<DXVA::CDXVAOutputBuffer*>(videoBuffer);
-    CopyToStaging(reinterpret_cast<ID3D11VideoDecoderOutputView*>(buf->view));
+    CopyToStaging(buf->view);
   }
 }
 
@@ -424,7 +460,7 @@ bool CRenderBuffer::CopyToD3D11()
   uint8_t* dst[] = {pData, pData + m_heightTex * rect.RowPitch};
   int dstStride[] = {rect.RowPitch, rect.RowPitch};
   // source
-  uint8_t* src[3]; 
+  uint8_t* src[3];
   videoBuffer->GetPlanes(src);
   int srcStrides[3];
   videoBuffer->GetStrides(srcStrides);
@@ -445,7 +481,7 @@ bool CRenderBuffer::CopyToD3D11()
         // copy UV
         copy_plane(src[1], srcStrides[1], height >> 1, width, dst[1], dstStride[1]);
       });
-    // copy cache size of UV line again to fix Intel cache issue 
+    // copy cache size of UV line again to fix Intel cache issue
     copy_plane(src[1], srcStrides[1], 1, 32, dst[1], dstStride[1]);
   }
   // convert 8bit
@@ -458,7 +494,7 @@ bool CRenderBuffer::CopyToD3D11()
         // convert U+V -> UV
         convert_yuv420_nv12_chrome(&src[1], &srcStrides[1], height, width, dst[1], dstStride[1]);
       });
-    // copy cache size of UV line again to fix Intel cache issue 
+    // copy cache size of UV line again to fix Intel cache issue
     // height and width multiplied by two because they will be divided by func
     convert_yuv420_nv12_chrome(&src[1], &srcStrides[1], 2, 64, dst[1], dstStride[1]);
   }
@@ -474,7 +510,7 @@ bool CRenderBuffer::CopyToD3D11()
         // convert U+V -> UV
         convert_yuv420_p01x_chrome(&src[1], &srcStrides[1], height, width, dst[1], dstStride[1], bpp);
       });
-    // copy cache size of UV line again to fix Intel cache issue 
+    // copy cache size of UV line again to fix Intel cache issue
     // height multiplied by two because it will be divided by func
     convert_yuv420_p01x_chrome(&src[1], &srcStrides[1], 2, 32, dst[1], dstStride[1], bpp);
   }
@@ -483,27 +519,23 @@ bool CRenderBuffer::CopyToD3D11()
 
 bool CRenderBuffer::CopyToStaging(ID3D11View* view)
 {
-  HRESULT hr = S_OK;
-
   if (!view)
     return false;
 
   ID3D11VideoDecoderOutputView* pView = reinterpret_cast<ID3D11VideoDecoderOutputView*>(view);
   D3D11_VIDEO_DECODER_OUTPUT_VIEW_DESC vpivd;
   pView->GetDesc(&vpivd);
-  ID3D11Resource* resource = nullptr;
-  pView->GetResource(&resource);
+  ComPtr<ID3D11Resource> resource;
+  pView->GetResource(resource.GetAddressOf());
 
   if (!m_staging)
   {
     // create staging texture
-    ID3D11Texture2D* surface = nullptr;
-    hr = resource->QueryInterface(__uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&surface));
-    if (SUCCEEDED(hr))
+    ComPtr<ID3D11Texture2D> surface;
+    if (SUCCEEDED(resource.As(&surface)))
     {
       D3D11_TEXTURE2D_DESC tDesc;
       surface->GetDesc(&tDesc);
-      SAFE_RELEASE(surface);
 
       CD3D11_TEXTURE2D_DESC sDesc(tDesc);
       sDesc.ArraySize = 1;
@@ -511,28 +543,26 @@ bool CRenderBuffer::CopyToStaging(ID3D11View* view)
       sDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
       sDesc.BindFlags = 0;
 
-      hr = g_Windowing.Get3D11Device()->CreateTexture2D(&sDesc, nullptr, &m_staging);
-      if (SUCCEEDED(hr))
+      if (SUCCEEDED(DX::DeviceResources::Get()->GetD3DDevice()->CreateTexture2D(&sDesc, nullptr, m_staging.GetAddressOf())))
         m_sDesc = sDesc;
     }
   }
 
   if (m_staging)
   {
-    ID3D11DeviceContext* pContext = g_Windowing.GetImmediateContext();
+    ComPtr<ID3D11DeviceContext> pContext(DX::DeviceResources::Get()->GetImmediateContext());
     // queue copying content from decoder texture to temporary texture.
     // actual data copying will be performed before rendering
-    pContext->CopySubresourceRegion(m_staging,
+    pContext->CopySubresourceRegion(m_staging.Get(),
                                     D3D11CalcSubresource(0, 0, 1),
                                     0, 0, 0,
-                                    resource,
+                                    resource.Get(),
                                     D3D11CalcSubresource(0, vpivd.Texture2D.ArraySlice, 1),
                                     nullptr);
     m_bPending = true;
   }
-  SAFE_RELEASE(resource);
 
-  return SUCCEEDED(hr);
+  return m_staging != nullptr;
 }
 
 void CRenderBuffer::CopyFromStaging() const
@@ -540,12 +570,15 @@ void CRenderBuffer::CopyFromStaging() const
   if (!m_locked)
     return;
 
-  ID3D11DeviceContext* pContext = g_Windowing.GetImmediateContext();
+  ComPtr<ID3D11DeviceContext> pContext(DX::DeviceResources::Get()->GetImmediateContext());
   D3D11_MAPPED_SUBRESOURCE rectangle;
-  if (SUCCEEDED(pContext->Map(m_staging, 0, D3D11_MAP_READ, 0, &rectangle)))
+  if (SUCCEEDED(pContext->Map(m_staging.Get(), 0, D3D11_MAP_READ, 0, &rectangle)))
   {
     void* (*copy_func)(void* d, const void* s, size_t size) =
-      ((g_cpuInfo.GetCPUFeatures() & CPU_FEATURE_SSE4) != 0) ? gpu_memcpy : memcpy;
+#if defined(HAVE_SSE2)
+      ((g_cpuInfo.GetCPUFeatures() & CPU_FEATURE_SSE4) != 0) ? gpu_memcpy :
+#endif
+      memcpy;
 
     uint8_t* s_y = static_cast<uint8_t*>(rectangle.pData);
     uint8_t* s_uv = static_cast<uint8_t*>(rectangle.pData) + m_sDesc.Height * rectangle.RowPitch;
@@ -583,7 +616,7 @@ void CRenderBuffer::CopyFromStaging() const
           }
         });
     }
-    pContext->Unmap(m_staging, 0);
+    pContext->Unmap(m_staging.Get(), 0);
   }
 }
 
@@ -640,7 +673,13 @@ bool CRenderBuffer::CopyBuffer()
       tasks.push_back(task);
     }
 
-    when_all(tasks.begin(), tasks.end()).wait();//.then([this]() { StartRender(); });
+    // event based await is required on WinRT because
+    // blocking WinRT STA threads with task.wait() isn't allowed
+    auto sync = std::make_shared<Concurrency::event>();
+    when_all(tasks.begin(), tasks.end()).then([&sync]() {
+      sync->set();
+    });
+    sync->wait();
     return true;
   }
   return false;

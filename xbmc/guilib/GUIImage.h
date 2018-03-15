@@ -10,7 +10,7 @@
 
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -63,8 +63,8 @@ public:
     bool         m_fading;   ///< whether we're fading out
 
   private:
-    CFadingTexture(const CFadingTexture&);
-    CFadingTexture& operator=(const CFadingTexture&);
+    CFadingTexture(const CFadingTexture&) = delete;
+    CFadingTexture& operator=(const CFadingTexture&) = delete;
   };
 
   CGUIImage(int parentID, int controlID, float posX, float posY, float width, float height, const CTextureInfo& texture);

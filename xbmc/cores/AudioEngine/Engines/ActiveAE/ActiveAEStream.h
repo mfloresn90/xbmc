@@ -1,7 +1,7 @@
 #pragma once
 /*
  *      Copyright (C) 2010-2013 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -128,6 +128,10 @@ public:
 protected:
   CActiveAEBufferPoolResample *m_resampleBuffers;
   CActiveAEBufferPoolAtempo *m_atempoBuffers;
+
+private:
+  CActiveAEStreamBuffers(const CActiveAEStreamBuffers&) = delete;
+  CActiveAEStreamBuffers& operator=(const CActiveAEStreamBuffers&) = delete;
 };
 
 class CActiveAEStream : public IAEStream
@@ -154,6 +158,7 @@ public:
   bool IsBuffering() override;
   double GetCacheTime() override;
   double GetCacheTotal() override;
+  double GetMaxDelay() override;
 
   void Pause() override;
   void Resume() override;

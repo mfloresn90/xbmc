@@ -2,7 +2,7 @@
 
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -143,7 +143,8 @@ public:
 protected:
   //singleton: we don't want to get instantiated nor copied or deleted from outside
   CZeroconfBrowser();
-  CZeroconfBrowser(const CZeroconfBrowser&);
+  CZeroconfBrowser(const CZeroconfBrowser&) = delete;
+  CZeroconfBrowser& operator=(const CZeroconfBrowser&) = delete;
   virtual ~CZeroconfBrowser();
 
   // pure virtual methods to implement for OS specific implementations

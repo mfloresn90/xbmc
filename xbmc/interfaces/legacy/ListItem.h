@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -106,8 +106,7 @@ namespace XBMCAddon
       }
 #endif
 
-      //! @todo Switch to 'override' usage once 14.04 (Trusty) hits EOL. swig <3.0 doesn't understand C++11
-      virtual ~ListItem();
+      ~ListItem() override;
 
 #ifdef DOXYGEN_SHOULD_USE_THIS
       ///
@@ -270,6 +269,33 @@ namespace XBMCAddon
       setArt(...);
 #else
       void setArt(const Properties& dictionary);
+#endif
+
+#ifdef DOXYGEN_SHOULD_USE_THIS
+      ///
+      /// \ingroup python_xbmcgui_listitem
+      /// @brief \python_func{ setIsFolder(isFolder) }
+      ///-----------------------------------------------------------------------
+      /// Sets if this listitem is a folder.
+      ///
+      /// @param isFolder            bool - True=folder / False=not a folder (default).
+      ///
+      ///
+      ///-----------------------------------------------------------------------
+      ///
+      /// @python_v18 New function added.
+      ///
+      /// **Example:**
+      /// ~~~~~~~~~~~~~{.py}
+      /// ...
+      /// # setIsFolder(isFolder)
+      /// listitem.setIsFolder(True)
+      /// ...
+      /// ~~~~~~~~~~~~~
+      ///
+      setIsFolder(...);
+#else
+      void setIsFolder(bool isFolder);
 #endif
 
 #ifdef DOXYGEN_SHOULD_USE_THIS
@@ -777,13 +803,13 @@ namespace XBMCAddon
 #ifdef DOXYGEN_SHOULD_USE_THIS
       ///
       /// \ingroup python_xbmcgui_listitem
-      /// @brief \python_func{ addAvailableThumb(images) }
+      /// @brief \python_func{ addAvailableArtwork(images) }
       ///-----------------------------------------------------------------------
-      /// @brief Add a thumb to available thumbs (needed for scrapers)
+      /// @brief Add an image to available artworks (needed for scrapers)
       ///
       /// @param url            string (image path url)
-      /// @param aspect         [opt] string (image type)
-      /// @param referrer       [opt] string (referr url)
+      /// @param art_type       string (image type)
+      /// @param referrer       [opt] string (referrer url)
       /// @param cache          [opt] string (filename in cache)
       /// @param post           [opt] bool (use post to retrieve the image, default false)
       /// @param isgz           [opt] bool (use gzip to retrieve the image, default false)
@@ -795,13 +821,13 @@ namespace XBMCAddon
       /// **Example:**
       /// ~~~~~~~~~~~~~{.py}
       /// ...
-      /// listitem.addAvailableThumb(path_to_image_1, "1.77")
+      /// listitem.addAvailableArtwork(path_to_image_1, "thumb")
       /// ...
       /// ~~~~~~~~~~~~~
       ///
-      addAvailableThumb(...);
+      addAvailableArtwork(...);
 #else
-      void addAvailableThumb(std::string url, std::string aspect = "", std::string referrer = "", std::string cache = "", bool post = false, bool isgz = false, int season = -1);
+      void addAvailableArtwork(std::string url, std::string art_type = "", std::string referrer = "", std::string cache = "", bool post = false, bool isgz = false, int season = -1);
 #endif
 
 #ifdef DOXYGEN_SHOULD_USE_THIS

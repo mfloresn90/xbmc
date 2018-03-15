@@ -32,14 +32,14 @@
 #include "IButtonMapper.h"
 #include "Key.h"
 #include "KeyboardTranslator.h"
-#include "MouseTranslator.h"
 #include "WindowTranslator.h"
-#include "FileItem.h"
 #include "filesystem/Directory.h"
 #include "guilib/WindowIDs.h"
-#include "Util.h"
+#include "input/mouse/MouseTranslator.h"
 #include "utils/log.h"
 #include "utils/XBMCTinyXML.h"
+#include "FileItem.h"
+#include "Util.h"
 
 using namespace KODI;
 
@@ -197,33 +197,33 @@ CAction CButtonTranslator::GetAction(int window, const CKey &key, bool fallback)
 {
   std::string strAction;
 
+  // handle virtual windows
+  window = CWindowTranslator::GetVirtualWindow(window);
+
   // try to get the action from the current window
   unsigned int actionID = GetActionCode(window, key, strAction);
 
-  // if it's invalid, try to get it from the global map
-  if (actionID == ACTION_NONE && fallback)
+  if (fallback)
   {
-    //! @todo Refactor fallback logic
-    int fallbackWindow = CWindowTranslator::GetFallbackWindow(window);
-    if (fallbackWindow > -1)
-      actionID = GetActionCode(fallbackWindow, key, strAction);
-
-    // still no valid action? use global map
-    if (actionID == ACTION_NONE)
-      actionID = GetActionCode(-1, key, strAction);
+    // if it's invalid, try to get it from fallback windows or the global map (window == -1)
+    while (actionID == ACTION_NONE && window > -1)
+    {
+      window = CWindowTranslator::GetFallbackWindow(window);
+      actionID = GetActionCode(window, key, strAction);
+    }
   }
 
-  // Now fill our action structure
-  CAction action(actionID, strAction, key);
-  return action;
-}
-
-CAction CButtonTranslator::GetGlobalAction(const CKey &key)
-{
-  return GetAction(-1, key, true);
+  return CAction(actionID, strAction, key);
 }
 
 bool CButtonTranslator::HasLongpressMapping(int window, const CKey &key)
+{
+  // handle virtual windows
+  window = CWindowTranslator::GetVirtualWindow(window);
+  return HasLongpressMapping_Internal(window, key);
+}
+
+bool CButtonTranslator::HasLongpressMapping_Internal(int window, const CKey &key)
 {
   std::map<int, buttonMap>::const_iterator it = m_translatorMap.find(window);
   if (it != m_translatorMap.end())
@@ -252,11 +252,11 @@ bool CButtonTranslator::HasLongpressMapping(int window, const CKey &key)
   {
     // first check if we have a fallback for the window
     int fallbackWindow = CWindowTranslator::GetFallbackWindow(window);
-    if (fallbackWindow > -1 && HasLongpressMapping(fallbackWindow, key))
+    if (fallbackWindow > -1 && HasLongpressMapping_Internal(fallbackWindow, key))
       return true;
 
     // fallback to default section
-    return HasLongpressMapping(-1, key);
+    return HasLongpressMapping_Internal(-1, key);
   }
 
   return false;

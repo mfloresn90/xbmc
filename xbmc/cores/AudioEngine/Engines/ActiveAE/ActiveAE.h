@@ -1,7 +1,7 @@
 #pragma once
 /*
  *      Copyright (C) 2010-2013 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -23,7 +23,6 @@
 #include <string>
 #include <vector>
 
-#include "system.h"
 #include "threads/Thread.h"
 
 #include "ActiveAESink.h"
@@ -50,6 +49,7 @@ namespace ActiveAE
 
 class CActiveAESound;
 class CActiveAEStream;
+class CActiveAESettings;
 
 struct AudioSettings
 {
@@ -190,7 +190,8 @@ public:
   void GetDelay(AEDelayStatus& status, CActiveAEStream *stream);
   void GetSyncInfo(CAESyncInfo& info, CActiveAEStream *stream);
   float GetCacheTime(CActiveAEStream *stream);
-  float GetCacheTotal(CActiveAEStream *stream);
+  float GetCacheTotal();
+  float GetMaxDelay();
   float GetWaterLevel();
   void SetSuspended(bool state);
   void SetDSP(bool state);
@@ -240,13 +241,12 @@ public:
   bool Suspend() override;
   bool Resume() override;
   bool IsSuspended() override;
-  void OnSettingsChange(const std::string& setting) override;
+  void OnSettingsChange();
 
   float GetVolume() override;
   void SetVolume(const float volume) override;
   void SetMute(const bool enabled) override;
   bool IsMuted() override;
-  void SetSoundMode(const int mode) override;
 
   /* returns a new stream for data in the specified format */
   IAEStream *MakeStream(AEAudioFormat &audioFormat, unsigned int options = 0, IAEClockCallback *clock = NULL) override;
@@ -259,7 +259,6 @@ public:
   void GarbageCollect() override {};
 
   void EnumerateOutputDevices(AEDeviceList &devices, bool passthrough) override;
-  std::string GetDefaultDevice(bool passthrough) override;
   bool SupportsRaw(AEAudioFormat &format) override;
   bool SupportsSilenceTimeout() override;
   bool HasStereoAudioChannelCount() override;
@@ -285,7 +284,8 @@ protected:
   void GetDelay(AEDelayStatus& status, CActiveAEStream *stream) { m_stats.GetDelay(status, stream); }
   void GetSyncInfo(CAESyncInfo& info, CActiveAEStream *stream) { m_stats.GetSyncInfo(info, stream); }
   float GetCacheTime(CActiveAEStream *stream) { return m_stats.GetCacheTime(stream); }
-  float GetCacheTotal(CActiveAEStream *stream) { return m_stats.GetCacheTotal(stream); }
+  float GetCacheTotal() { return m_stats.GetCacheTotal(); }
+  float GetMaxDelay() { return m_stats.GetMaxDelay(); }
   void FlushStream(CActiveAEStream *stream);
   void PauseStream(CActiveAEStream *stream, bool pause);
   void StopSound(CActiveAESound *sound);
@@ -362,6 +362,7 @@ protected:
   CEngineStats m_stats;
   IAEEncoder *m_encoder;
   std::string m_currDevice;
+  std::unique_ptr<CActiveAESettings> m_settingsHandler;
 
   // buffers
   CActiveAEBufferPoolResample *m_sinkBuffers;

@@ -1,7 +1,7 @@
 #pragma once
 /*
  *      Copyright (C) 2014 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -153,8 +153,8 @@ protected:
 
 private:
   CVideoLibraryQueue();
-  CVideoLibraryQueue(const CVideoLibraryQueue&);
-  CVideoLibraryQueue const& operator=(CVideoLibraryQueue const&);
+  CVideoLibraryQueue(const CVideoLibraryQueue&) = delete;
+  CVideoLibraryQueue const& operator=(CVideoLibraryQueue const&) = delete;
 
   typedef std::set<CVideoLibraryJob*> VideoLibraryJobs;
   typedef std::map<std::string, VideoLibraryJobs> VideoLibraryJobMap;

@@ -20,21 +20,19 @@
 
 #include "RendererAML.h"
 
-#if defined(HAS_LIBAMCODEC)
 #include "cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecAmlogic.h"
 #include "cores/VideoPlayer/DVDCodecs/Video/AMLCodec.h"
 #include "utils/log.h"
 #include "utils/SysfsUtils.h"
 #include "utils/ScreenshotAML.h"
 #include "settings/MediaSettings.h"
-#include "windowing/WindowingFactory.h"
 #include "cores/VideoPlayer/VideoRenderers/RenderCapture.h"
-#include "../RenderFactory.h"
+#include "cores/VideoPlayer/VideoRenderers/RenderFactory.h"
+#include "cores/VideoPlayer/VideoRenderers/RenderFlags.h"
 #include "settings/AdvancedSettings.h"
 
 CRendererAML::CRendererAML()
- : m_iRenderBuffer(0)
- , m_prevVPts(-1)
+ : m_prevVPts(-1)
  , m_bConfigured(false)
 {
   CLog::Log(LOGINFO, "Constructing CRendererAML");
@@ -58,18 +56,20 @@ bool CRendererAML::Register()
   return true;
 }
 
-bool CRendererAML::Configure(const VideoPicture &picture, float fps, unsigned flags, unsigned int orientation)
+bool CRendererAML::Configure(const VideoPicture &picture, float fps, unsigned int orientation)
 {
   m_sourceWidth = picture.iWidth;
   m_sourceHeight = picture.iHeight;
   m_renderOrientation = orientation;
 
-  // Save the flags.
-  m_iFlags = flags;
+  m_iFlags = GetFlagsChromaPosition(picture.chroma_position) |
+             GetFlagsColorMatrix(picture.color_space, picture.iWidth, picture.iHeight) |
+             GetFlagsColorPrimaries(picture.color_primaries) |
+             GetFlagsStereoMode(picture.stereoMode);
 
   // Calculate the input frame aspect ratio.
   CalculateFrameAspectRatio(picture.iDisplayWidth, picture.iDisplayHeight);
-  SetViewMode(CMediaSettings::GetInstance().GetCurrentVideoSettings().m_ViewMode);
+  SetViewMode(m_videoSettings.m_ViewMode);
   ManageRenderArea();
 
   m_bConfigured = true;
@@ -125,21 +125,12 @@ void CRendererAML::ReleaseBuffer(int idx)
   }
 }
 
-void CRendererAML::FlipPage(int source)
-{
-  if( source >= 0 && source < m_numRenderBuffers )
-    m_iRenderBuffer = source;
-  else
-    m_iRenderBuffer = (m_iRenderBuffer + 1) % m_numRenderBuffers;
-
-  return;
-}
-
 bool CRendererAML::Supports(ERENDERFEATURE feature)
 {
   if (feature == RENDERFEATURE_ZOOM ||
       feature == RENDERFEATURE_CONTRAST ||
       feature == RENDERFEATURE_BRIGHTNESS ||
+      feature == RENDERFEATURE_NONLINSTRETCH ||
       feature == RENDERFEATURE_STRETCH ||
       feature == RENDERFEATURE_PIXEL_RATIO ||
       feature == RENDERFEATURE_ROTATION)
@@ -161,11 +152,11 @@ void CRendererAML::Reset()
   }
 }
 
-void CRendererAML::RenderUpdate(bool clear, DWORD flags, DWORD alpha)
+void CRendererAML::RenderUpdate(int index, int index2, bool clear, unsigned int flags, unsigned int alpha)
 {
   ManageRenderArea();
 
-  CAMLVideoBuffer *amli = dynamic_cast<CAMLVideoBuffer *>(m_buffers[m_iRenderBuffer].videoBuffer);
+  CAMLVideoBuffer *amli = dynamic_cast<CAMLVideoBuffer *>(m_buffers[index].videoBuffer);
   if(amli && amli->m_amlCodec)
   {
     int pts = amli->m_omxPts;
@@ -179,5 +170,3 @@ void CRendererAML::RenderUpdate(bool clear, DWORD flags, DWORD alpha)
   }
   CAMLCodec::PollFrame();
 }
-
-#endif

@@ -1,9 +1,6 @@
-#ifndef LINUXRENDERERGLES_RENDERER
-#define LINUXRENDERERGLES_RENDERER
-
 /*
  *      Copyright (C) 2010-2013 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -21,14 +18,15 @@
  *
  */
 
-#if HAS_GLES >= 2
+#pragma once
+
 #include <vector>
 
 #include "system_gl.h"
 
 #include "FrameBufferObject.h"
 #include "xbmc/guilib/Shader.h"
-#include "settings/VideoSettings.h"
+#include "cores/VideoSettings.h"
 #include "RenderFlags.h"
 #include "RenderInfo.h"
 #include "guilib/GraphicContext.h"
@@ -36,6 +34,7 @@
 #include "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.h"
 
 class CRenderCapture;
+class CRenderSystemGLES;
 
 class CBaseTexture;
 namespace Shaders { class BaseYUV2RGBShader; }
@@ -72,7 +71,6 @@ enum RenderMethod
   RENDER_CVREF  = 0x080,
   RENDER_MEDIACODEC = 0x400,
   RENDER_MEDIACODECSURFACE = 0x800,
-  RENDER_IMXMAP = 0x1000
 };
 
 enum RenderQuality
@@ -111,18 +109,16 @@ public:
   static bool Register();
 
   // Player functions
-  virtual bool Configure(const VideoPicture &picture, float fps, unsigned flags, unsigned int orientation) override;
+  virtual bool Configure(const VideoPicture &picture, float fps, unsigned int orientation) override;
   virtual bool IsConfigured() override { return m_bConfigured; }
   virtual void AddVideoPicture(const VideoPicture &picture, int index, double currentClock) override;
-  virtual void FlipPage(int source) override;
   virtual void UnInit() override;
-  virtual void Reset() override;
   virtual void Flush() override;
   virtual void ReorderDrawPoints() override;
   virtual void SetBufferSize(int numBuffers) override { m_NumYV12Buffers = numBuffers; }
   virtual bool IsGuiLayer() override;
   virtual void ReleaseBuffer(int idx) override;
-  virtual void RenderUpdate(bool clear, DWORD flags = 0, DWORD alpha = 255) override;
+  virtual void RenderUpdate(int index, int index2, bool clear, unsigned int flags, unsigned int alpha) override;
   virtual void Update() override;
   virtual bool RenderCapture(CRenderCapture* capture) override;
   virtual CRenderInfo GetRenderInfo() override;
@@ -161,7 +157,8 @@ protected:
   void CalculateTextureSourceRects(int source, int num_planes);
 
   // renderers
-  void RenderMultiPass(int index, int field);     // multi pass glsl renderer
+  void RenderToFBO(int index, int field, bool weave = false);
+  void RenderFromFBO();
   void RenderSinglePass(int index, int field);    // single pass glsl renderer
 
   // hooks for HwDec Renderered
@@ -169,11 +166,14 @@ protected:
   virtual bool RenderHook(int idx) { return false; };
   virtual void AfterRenderHook(int idx) {};
 
-  CFrameBufferObject m_fbo;
+  struct
+  {
+    CFrameBufferObject fbo;
+    float width, height;
+  } m_fbo;
 
   int m_iYV12RenderBuffer;
   int m_NumYV12Buffers;
-  int m_iLastRenderBuffer;
 
   bool m_bConfigured;
   bool m_bValidated;
@@ -186,6 +186,7 @@ protected:
   // Raw data used by renderer
   int m_currentField;
   int m_reloadShaders;
+  CRenderSystemGLES *m_renderSystem;
 
   struct YUVPLANE
   {
@@ -233,17 +234,3 @@ protected:
   float m_clearColour;
 };
 
-
-inline int NP2( unsigned x )
-{
-    --x;
-    x |= x >> 1;
-    x |= x >> 2;
-    x |= x >> 4;
-    x |= x >> 8;
-    x |= x >> 16;
-    return ++x;
-}
-#endif
-
-#endif

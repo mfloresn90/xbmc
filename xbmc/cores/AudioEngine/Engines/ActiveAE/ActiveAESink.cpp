@@ -33,9 +33,10 @@
 #include <algorithm>
 
 #ifdef TARGET_POSIX
-#include "linux/XMemUtils.h"
+#include "platform/linux/XMemUtils.h"
 #endif
 
+using namespace AE;
 using namespace ActiveAE;
 
 CActiveAESink::CActiveAESink(CEvent *inMsgEvent) :
@@ -81,6 +82,8 @@ void CActiveAESink::Dispose()
 
   delete m_packer;
   m_packer = nullptr;
+
+  CAESinkFactory::Cleanup();
 }
 
 AEDeviceType CActiveAESink::GetDeviceType(const std::string &device)
@@ -88,7 +91,7 @@ AEDeviceType CActiveAESink::GetDeviceType(const std::string &device)
   std::string dev = device;
   std::string dri;
   CAESinkFactory::ParseDevice(dev, dri);
-  for (AESinkInfoList::iterator itt = m_sinkInfoList.begin(); itt != m_sinkInfoList.end(); ++itt)
+  for (auto itt = m_sinkInfoList.begin(); itt != m_sinkInfoList.end(); ++itt)
   {
     for (AEDeviceInfoList::iterator itt2 = itt->m_deviceInfoList.begin(); itt2 != itt->m_deviceInfoList.end(); ++itt2)
     {
@@ -102,12 +105,12 @@ AEDeviceType CActiveAESink::GetDeviceType(const std::string &device)
 
 bool CActiveAESink::HasPassthroughDevice()
 {
-  for (AESinkInfoList::iterator itt = m_sinkInfoList.begin(); itt != m_sinkInfoList.end(); ++itt)
+  for (auto itt = m_sinkInfoList.begin(); itt != m_sinkInfoList.end(); ++itt)
   {
     for (AEDeviceInfoList::iterator itt2 = itt->m_deviceInfoList.begin(); itt2 != itt->m_deviceInfoList.end(); ++itt2)
     {
       CAEDeviceInfo& info = *itt2;
-      if (info.m_deviceType != AE_DEVTYPE_PCM)
+      if (info.m_deviceType != AE_DEVTYPE_PCM && !info.m_streamTypes.empty())
         return true;
     }
   }
@@ -120,11 +123,11 @@ bool CActiveAESink::SupportsFormat(const std::string &device, AEAudioFormat &for
   std::string dri;
 
   CAESinkFactory::ParseDevice(dev, dri);
-  for (AESinkInfoList::iterator itt = m_sinkInfoList.begin(); itt != m_sinkInfoList.end(); ++itt)
+  for (auto itt = m_sinkInfoList.begin(); itt != m_sinkInfoList.end(); ++itt)
   {
     if (dri == itt->m_sinkName)
     {
-      for (AEDeviceInfoList::iterator itt2 = itt->m_deviceInfoList.begin(); itt2 != itt->m_deviceInfoList.end(); ++itt2)
+      for (auto itt2 = itt->m_deviceInfoList.begin(); itt2 != itt->m_deviceInfoList.end(); ++itt2)
       {
         CAEDeviceInfo& info = *itt2;
         if (info.m_deviceName == dev)
@@ -202,11 +205,11 @@ bool CActiveAESink::NeedIECPacking()
   std::string dri;
 
   CAESinkFactory::ParseDevice(dev, dri);
-  for (AESinkInfoList::iterator itt = m_sinkInfoList.begin(); itt != m_sinkInfoList.end(); ++itt)
+  for (auto itt = m_sinkInfoList.begin(); itt != m_sinkInfoList.end(); ++itt)
   {
     if (dri == itt->m_sinkName)
     {
-      for (AEDeviceInfoList::iterator itt2 = itt->m_deviceInfoList.begin(); itt2 != itt->m_deviceInfoList.end(); ++itt2)
+      for (auto itt2 = itt->m_deviceInfoList.begin(); itt2 != itt->m_deviceInfoList.end(); ++itt2)
       {
         CAEDeviceInfo& info = *itt2;
         if (info.m_deviceName == dev)
@@ -675,8 +678,8 @@ void CActiveAESink::EnumerateSinkList(bool force)
 
   unsigned int c_retry = 4;
   m_sinkInfoList.clear();
-  CAESinkFactory::EnumerateEx(m_sinkInfoList);
-  while(m_sinkInfoList.empty() && c_retry > 0)
+  CAESinkFactory::EnumerateEx(m_sinkInfoList, false);
+  while (m_sinkInfoList.empty() && c_retry > 0)
   {
     CLog::Log(LOGNOTICE, "No Devices found - retry: %d", c_retry);
     Sleep(1500);
@@ -690,11 +693,11 @@ void CActiveAESink::EnumerateSinkList(bool force)
 
 void CActiveAESink::PrintSinks()
 {
-  for (AESinkInfoList::iterator itt = m_sinkInfoList.begin(); itt != m_sinkInfoList.end(); ++itt)
+  for (auto itt = m_sinkInfoList.begin(); itt != m_sinkInfoList.end(); ++itt)
   {
     CLog::Log(LOGNOTICE, "Enumerated %s devices:", itt->m_sinkName.c_str());
     int count = 0;
-    for (AEDeviceInfoList::iterator itt2 = itt->m_deviceInfoList.begin(); itt2 != itt->m_deviceInfoList.end(); ++itt2)
+    for (auto itt2 = itt->m_deviceInfoList.begin(); itt2 != itt->m_deviceInfoList.end(); ++itt2)
     {
       CLog::Log(LOGNOTICE, "    Device %d", ++count);
       CAEDeviceInfo& info = *itt2;
@@ -710,7 +713,7 @@ void CActiveAESink::EnumerateOutputDevices(AEDeviceList &devices, bool passthrou
 {
   EnumerateSinkList(false);
 
-  for (AESinkInfoList::iterator itt = m_sinkInfoList.begin(); itt != m_sinkInfoList.end(); ++itt)
+  for (auto itt = m_sinkInfoList.begin(); itt != m_sinkInfoList.end(); ++itt)
   {
     AESinkInfo sinkInfo = *itt;
     for (AEDeviceInfoList::iterator itt2 = sinkInfo.m_deviceInfoList.begin(); itt2 != sinkInfo.m_deviceInfoList.end(); ++itt2)
@@ -736,31 +739,11 @@ void CActiveAESink::EnumerateOutputDevices(AEDeviceList &devices, bool passthrou
   }
 }
 
-std::string CActiveAESink::GetDefaultDevice(bool passthrough)
-{
-  EnumerateSinkList(false);
-
-  for (AESinkInfoList::iterator itt = m_sinkInfoList.begin(); itt != m_sinkInfoList.end(); ++itt)
-  {
-    AESinkInfo sinkInfo = *itt;
-    for (AEDeviceInfoList::iterator itt2 = sinkInfo.m_deviceInfoList.begin(); itt2 != sinkInfo.m_deviceInfoList.end(); ++itt2)
-    {
-      CAEDeviceInfo devInfo = *itt2;
-      if (passthrough && devInfo.m_deviceType == AE_DEVTYPE_PCM)
-        continue;
-
-      std::string device = sinkInfo.m_sinkName + ":" + devInfo.m_deviceName;
-      return device;
-    }
-  }
-  return "default";
-}
-
 void CActiveAESink::GetDeviceFriendlyName(std::string &device)
 {
   m_deviceFriendlyName = "Device not found";
   /* Match the device and find its friendly name */
-  for (AESinkInfoList::iterator itt = m_sinkInfoList.begin(); itt != m_sinkInfoList.end(); ++itt)
+  for (auto itt = m_sinkInfoList.begin(); itt != m_sinkInfoList.end(); ++itt)
   {
     AESinkInfo sinkInfo = *itt;
     for (AEDeviceInfoList::iterator itt2 = sinkInfo.m_deviceInfoList.begin(); itt2 != sinkInfo.m_deviceInfoList.end(); ++itt2)
@@ -820,7 +803,7 @@ void CActiveAESink::OpenSink()
   // WARNING: this changes format and does not use passthrough
   m_sinkFormat = m_requestedFormat;
   CLog::Log(LOGDEBUG, "CActiveAESink::OpenSink - trying to open device %s", device.c_str());
-  m_sink = CAESinkFactory::Create(device, m_sinkFormat, passthrough);
+  m_sink = CAESinkFactory::Create(device, m_sinkFormat);
 
   // try first device in out list
   if (!m_sink && !m_sinkInfoList.empty())
@@ -832,17 +815,7 @@ void CActiveAESink::OpenSink()
       device = driver + ":" + device;
     m_sinkFormat = m_requestedFormat;
     CLog::Log(LOGDEBUG, "CActiveAESink::OpenSink - trying to open device %s", device.c_str());
-    m_sink = CAESinkFactory::Create(device, m_sinkFormat, passthrough);
-  }
-
-  // open NULL sink
-  //! @todo should not be required by ActiveAE
-  if (!m_sink)
-  {
-    device = "NULL:NULL";
-    m_sinkFormat = m_requestedFormat;
-    CLog::Log(LOGDEBUG, "CActiveAESink::OpenSink - open NULL sink");
-    m_sink = CAESinkFactory::Create(device, m_sinkFormat, passthrough);
+    m_sink = CAESinkFactory::Create(device, m_sinkFormat);
   }
 
   if (!m_sink)
@@ -929,6 +902,7 @@ unsigned int CActiveAESink::OutputSamples(CSampleBuffer* samples)
 
   if (m_requestedFormat.m_dataFormat == AE_FMT_RAW)
   {
+    bool skipSwap = false;
     if (m_needIecPack)
     {
       if (frames > 0)
@@ -962,7 +936,8 @@ unsigned int CActiveAESink::OutputSamples(CSampleBuffer* samples)
       {
         // construct a pause burst if we have already output valid audio
         bool burst = m_extStreaming && (m_packer->GetBuffer()[0] != 0);
-        m_packer->PackPause(m_sinkFormat.m_streamInfo, samples->pkt->pause_burst_ms, burst);
+        if (!m_packer->PackPause(m_sinkFormat.m_streamInfo, samples->pkt->pause_burst_ms, burst))
+          skipSwap = true;
       }
       else
         m_packer->Reset();
@@ -978,7 +953,8 @@ unsigned int CActiveAESink::OutputSamples(CSampleBuffer* samples)
         case SKIP_SWAP:
           break;
         case NEED_BYTESWAP:
-          Endian_Swap16_buf((uint16_t *)buffer[0], (uint16_t *)buffer[0], size / 2);
+          if (!skipSwap)
+            Endian_Swap16_buf((uint16_t *)buffer[0], (uint16_t *)buffer[0], size / 2);
           break;
         case CHECK_SWAP:
           SwapInit(samples);

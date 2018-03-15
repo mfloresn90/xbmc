@@ -40,13 +40,9 @@
 #undef PRAGMA_PACK_END
 
 #if defined(__GNUC__)
-  #if __GNUC__ > 2 || (__GNUC__ == 2 && __GNUC_MINOR__ >= 95)
-    #define ATTRIBUTE_PACKED __attribute__ ((packed))
-    #define PRAGMA_PACK 0
-  #if __GNUC__ >= 4
-    #define ATTRIBUTE_HIDDEN __attribute__ ((visibility ("hidden")))
-  #endif
-  #endif
+  #define ATTRIBUTE_PACKED __attribute__ ((packed))
+  #define PRAGMA_PACK 0
+  #define ATTRIBUTE_HIDDEN __attribute__ ((visibility ("hidden")))
 #endif
 
 #if !defined(ATTRIBUTE_PACKED)
@@ -160,6 +156,7 @@ typedef struct AddonToKodiFuncTable_Addon
 
   // Function addresses used for callbacks from addon to Kodi
   void (*free_string)(void* kodiBase, char* str);
+  void (*free_string_array)(void* kodiBase, char** arr, int numElements);
   char* (*get_addon_path)(void* kodiBase);
   char* (*get_base_user_path)(void* kodiBase);
   void (*addon_log_msg)(void* kodiBase, const int loglevel, const char *msg);

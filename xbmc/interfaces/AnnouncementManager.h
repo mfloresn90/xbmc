@@ -1,7 +1,7 @@
 #pragma once
 /*
  *      Copyright (C) 2005-2014 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -69,8 +69,8 @@ namespace ANNOUNCEMENT
     CEvent m_queueEvent;
 
   private:
-    CAnnouncementManager(const CAnnouncementManager&);
-    CAnnouncementManager const& operator=(CAnnouncementManager const&);
+    CAnnouncementManager(const CAnnouncementManager&) = delete;
+    CAnnouncementManager const& operator=(CAnnouncementManager const&) = delete;
 
     CCriticalSection m_critSection;
     std::vector<IAnnouncer *> m_announcers;

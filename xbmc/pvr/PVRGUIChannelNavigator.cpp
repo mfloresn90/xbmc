@@ -83,7 +83,7 @@ namespace PVR
 
   void CPVRGUIChannelNavigator::SelectChannel(const CPVRChannelPtr channel, ChannelSwitchMode eSwitchMode)
   {
-    g_infoManager.SetCurrentItem(CFileItemPtr(new CFileItem(channel)));
+    g_infoManager.SetCurrentItem(CFileItem(channel));
 
     CSingleLock lock(m_critSection);
     m_currentChannel = channel;
@@ -148,13 +148,16 @@ namespace PVR
     {
       g_infoManager.SetShowInfo(true);
 
-      if (iTimeout > 0)
+      CSingleLock lock(m_critSection);
+
+      if (m_iChannelInfoJobId >= 0)
       {
-        CSingleLock lock(m_critSection);
+        CJobManager::GetInstance().CancelJob(m_iChannelInfoJobId);
+        m_iChannelInfoJobId = -1;
+      }
 
-        if (m_iChannelInfoJobId >= 0)
-          CJobManager::GetInstance().CancelJob(m_iChannelInfoJobId);
-
+      if (!bForce && iTimeout > 0)
+      {
         CPVRChannelInfoTimeoutJob *job = new CPVRChannelInfoTimeoutJob(iTimeout * 1000);
         m_iChannelInfoJobId = CJobManager::GetInstance().AddJob(job, dynamic_cast<IJobCallback*>(job));
       }
@@ -183,7 +186,7 @@ namespace PVR
     }
 
     if (item)
-      g_infoManager.SetCurrentItem(item);
+      g_infoManager.SetCurrentItem(*item);
   }
 
   void CPVRGUIChannelNavigator::ToggleInfo()
@@ -209,7 +212,7 @@ namespace PVR
     }
 
     if (item)
-      g_infoManager.SetCurrentItem(item);
+      g_infoManager.SetCurrentItem(*item);
 
     ShowInfo(false);
   }

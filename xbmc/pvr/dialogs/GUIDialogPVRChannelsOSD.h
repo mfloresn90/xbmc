@@ -1,7 +1,7 @@
 #pragma once
 /*
  *      Copyright (C) 2012-2013 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -59,14 +59,13 @@ namespace PVR
     void ShowInfo(int item);
     void Clear();
     void Update();
-    CPVRChannelGroupPtr GetPlayingGroup();
+    void SaveSelectedItemPath(int iGroupID);
+    std::string GetLastSelectedItemPath(int iGroupID) const;
 
     CFileItemList *m_vecItems;
     CGUIViewControl m_viewControl;
     CPVRChannelGroupPtr m_group;
     std::map<int, std::string> m_groupSelectedItemPaths;
-    void SaveSelectedItemPath(int iGroupID);
-    std::string GetLastSelectedItemPath(int iGroupID) const;
     XbmcThreads::EndTime m_refreshTimeout;
   };
 }

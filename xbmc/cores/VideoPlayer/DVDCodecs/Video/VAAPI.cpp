@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2005-2014 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -19,24 +19,22 @@
  */
 #include "VAAPI.h"
 #include "ServiceBroker.h"
-#include "windowing/WindowingFactory.h"
 #include "DVDVideoCodec.h"
 #include "cores/VideoPlayer/DVDCodecs/DVDCodecUtils.h"
 #include "cores/VideoPlayer/DVDCodecs/DVDFactoryCodec.h"
-#include "cores/VideoPlayer/TimingConstants.h"
+#include "cores/VideoPlayer/Interface/Addon/TimingConstants.h"
 #include "cores/VideoPlayer/Process/ProcessInfo.h"
 #include "utils/log.h"
 #include "utils/StringUtils.h"
 #include "threads/SingleLock.h"
 #include "settings/Settings.h"
 #include "guilib/GraphicContext.h"
-#include "settings/MediaSettings.h"
 #include "settings/AdvancedSettings.h"
 #include <va/va_drm.h>
 #include <va/va_drmcommon.h>
 #include <drm_fourcc.h>
-#include "linux/XTimeUtils.h"
-#include "linux/XMemUtils.h"
+#include "platform/linux/XTimeUtils.h"
+#include "platform/linux/XMemUtils.h"
 
 extern "C" {
 #include "libavutil/avutil.h"
@@ -167,7 +165,7 @@ void CVAAPIContext::SetValidDRMVaDisplayFromRenderNode()
 
 void CVAAPIContext::SetVaDisplayForSystem()
 {
-  m_display = g_Windowing.GetVaDisplay();
+  m_display = CDecoder::m_pWinSystem->GetVADisplay();
 
   // Fallback to DRM
   if (!m_display)
@@ -488,6 +486,7 @@ bool CVideoSurfaces::HasRefs()
 
 bool CDecoder::m_capGeneral = false;
 bool CDecoder::m_capHevc = false;
+IVaapiWinSystem* CDecoder::m_pWinSystem = nullptr;
 
 CDecoder::CDecoder(CProcessInfo& processInfo) :
   m_vaapiOutput(*this, &m_inMsgEvent),
@@ -601,15 +600,17 @@ bool CDecoder::Open(AVCodecContext* avctx, AVCodecContext* mainctx, const enum A
         return false;
       break;
     }
-#if VA_CHECK_VERSION(0,38,1)
     case AV_CODEC_ID_VP9:
     {
-      profile = VAProfileVP9Profile0;
+      // VAAPI currently only supports Profile 0
+      if (avctx->profile == FF_PROFILE_VP9_0)
+        profile = VAProfileVP9Profile0;
+      else
+        profile = VAProfileNone;
       if (!m_vaapiConfig.context->SupportsProfile(profile))
         return false;
       break;
     }
-#endif
     case AV_CODEC_ID_WMV3:
       profile = VAProfileVC1Main;
       if (!m_vaapiConfig.context->SupportsProfile(profile))
@@ -841,10 +842,8 @@ CDVDVideoCodec::VCReturn CDecoder::Decode(AVCodecContext* avctx, AVFrame* pFrame
 
     // send frame to output for processing
     CVaapiDecodedPicture pic;
-    memset(&pic.DVDPic, 0, sizeof(pic.DVDPic));
     static_cast<ICallbackHWAccel*>(avctx->opaque)->GetPictureCommon(&pic.DVDPic);
     pic.videoSurface = surf;
-    pic.DVDPic.color_matrix = avctx->colorspace;
     m_bufferStats.IncDecoded();
     m_vaapiOutput.m_dataPort.SendOutMessage(COutputDataProtocol::NEWFRAME, &pic, sizeof(pic));
 
@@ -1179,8 +1178,10 @@ IHardwareDecoder* CDecoder::Create(CDVDStreamInfo &hint, CProcessInfo &processIn
   return nullptr;
 }
 
-void CDecoder::Register(bool hevc)
+void CDecoder::Register(IVaapiWinSystem *winSystem, bool hevc)
 {
+  m_pWinSystem = winSystem;
+
   CVaapiConfig config;
   if (!CVAAPIContext::EnsureContext(&config.context, nullptr))
     return;
@@ -1361,6 +1362,20 @@ void CVaapiBufferPool::DeleteTextures(bool precleanup)
     av_frame_free(&pic->avFrame);
     pic->valid = false;
   }
+}
+
+void CVaapiRenderPicture::GetPlanes(uint8_t*(&planes)[YuvImage::MAX_PLANES])
+{
+  planes[0] = avFrame->data[0];
+  planes[1] = avFrame->data[1];
+  planes[2] = avFrame->data[2];
+}
+
+void CVaapiRenderPicture::GetStrides(int(&strides)[YuvImage::MAX_PLANES])
+{
+  strides[0] = avFrame->linesize[0];
+  strides[1] = avFrame->linesize[1];
+  strides[2] = avFrame->linesize[2];
 }
 
 //-----------------------------------------------------------------------------
@@ -1817,8 +1832,18 @@ bool COutput::Uninit()
 {
   ProcessSyncPicture();
   ReleaseBufferPool();
-  delete m_pp;
-  m_pp = NULL;
+  if (m_pp)
+  {
+    std::shared_ptr<CPostproc> pp(m_pp);
+    m_discardedPostprocs.push_back(pp);
+    m_pp->Discard(this, &COutput::ReadyForDisposal);
+    m_pp = nullptr;
+  }
+
+  if (!m_discardedPostprocs.empty())
+  {
+    CLog::Log(LOGERROR, "VAAPI::COutput::Uninit - not all CPostprcs released");
+  }
   return true;
 }
 
@@ -1912,7 +1937,7 @@ void COutput::InitCycle()
 
   m_config.stats->SetCanSkipDeint(false);
 
-  EINTERLACEMETHOD method = CMediaSettings::GetInstance().GetCurrentVideoSettings().m_InterlaceMethod;
+  EINTERLACEMETHOD method = m_config.processInfo->GetVideoSettings().m_InterlaceMethod;
   bool interlaced = m_currentPicture.DVDPic.iFlags & DVP_FLAG_INTERLACED;
 
   if (!(flags & DVD_CODEC_CTRL_NO_POSTPROC) &&
@@ -1922,11 +1947,12 @@ void COutput::InitCycle()
     if (!m_config.processInfo->Supports(method))
       method = VS_INTERLACEMETHOD_VAAPI_BOB;
 
-    if (m_pp && (method != m_currentDiMethod || !m_pp->Compatible(method)))
+    if (m_pp && !m_pp->UpdateDeintMethod(method))
     {
-      delete m_pp;
-      m_pp = NULL;
-      DropVppProcessedPictures();
+      std::shared_ptr<CPostproc> pp(m_pp);
+      m_discardedPostprocs.push_back(pp);
+      m_pp->Discard(this, &COutput::ReadyForDisposal);
+      m_pp = nullptr;
       m_config.processInfo->SetVideoDeintMethod("unknown");
     }
     if (!m_pp)
@@ -1945,7 +1971,6 @@ void COutput::InitCycle()
       if (m_pp->PreInit(m_config))
       {
         m_pp->Init(method);
-        m_currentDiMethod = method;
 
         if (method == VS_INTERLACEMETHOD_DEINTERLACE)
           m_config.processInfo->SetVideoDeintMethod("yadif");
@@ -1969,11 +1994,12 @@ void COutput::InitCycle()
   else
   {
     method = VS_INTERLACEMETHOD_NONE;
-    if (m_pp && !m_pp->Compatible(method))
+    if (m_pp && !m_pp->UpdateDeintMethod(method))
     {
-      delete m_pp;
-      m_pp = NULL;
-      DropVppProcessedPictures();
+      std::shared_ptr<CPostproc> pp(m_pp);
+      m_discardedPostprocs.push_back(pp);
+      m_pp->Discard(this, &COutput::ReadyForDisposal);
+      m_pp = nullptr;
     }
     if (!m_pp)
     {
@@ -1988,7 +2014,6 @@ void COutput::InitCycle()
       if (m_pp->PreInit(m_config))
       {
         m_pp->Init(method);
-        m_currentDiMethod = method;
         m_config.processInfo->SetVideoDeintMethod("none");
       }
       else
@@ -2012,8 +2037,14 @@ CVaapiRenderPicture* COutput::ProcessPicture(CVaapiProcessedPicture &pic)
   retPic = m_bufferPool->GetVaapi();
   retPic->DVDPic.SetParams(pic.DVDPic);
 
-  if (pic.source == CVaapiProcessedPicture::SKIP_SRC ||
-      pic.source == CVaapiProcessedPicture::VPP_SRC)
+  if (!pic.source)
+  {
+    CLog::Log(LOGERROR, "VAAPI::ProcessPicture - pic has no source");
+    retPic->Release();
+    return nullptr;
+  }
+
+  if (pic.source->UseVideoSurface())
   {
     vaSyncSurface(m_config.dpy, pic.videoSurface);
     pic.id = m_bufferPool->procPicId++;
@@ -2021,16 +2052,11 @@ CVaapiRenderPicture* COutput::ProcessPicture(CVaapiProcessedPicture &pic)
     retPic->procPic = pic;
     retPic->vadsp = m_config.dpy;
   }
-  else if (pic.source == CVaapiProcessedPicture::FFMPEG_SRC)
-  {
-    av_frame_move_ref(retPic->avFrame, pic.frame);
-    av_frame_free(&pic.frame);
-    retPic->procPic.videoSurface = VA_INVALID_ID;
-  }
   else
   {
-    retPic->Release();
-    return nullptr;
+    av_frame_move_ref(retPic->avFrame, pic.frame);
+    pic.source->ClearRef(pic);
+    retPic->procPic.videoSurface = VA_INVALID_ID;
   }
 
   retPic->DVDPic.dts = DVD_NOPTS_VALUE;
@@ -2044,50 +2070,12 @@ CVaapiRenderPicture* COutput::ProcessPicture(CVaapiProcessedPicture &pic)
 
 void COutput::ReleaseProcessedPicture(CVaapiProcessedPicture &pic)
 {
-  if (pic.source == CVaapiProcessedPicture::VPP_SRC && m_pp)
+  if (!pic.source)
   {
-    CVppPostproc *pp = dynamic_cast<CVppPostproc*>(m_pp);
-    if (pp)
-    {
-      pp->ClearRef(pic.videoSurface);
-    }
+    return;
   }
-  else if (pic.source == CVaapiProcessedPicture::SKIP_SRC)
-  {
-    m_config.videoSurfaces->ClearRender(pic.videoSurface);
-  }
-  else if (pic.source == CVaapiProcessedPicture::FFMPEG_SRC)
-  {
-    av_frame_free(&pic.frame);
-  }
-}
-
-void COutput::DropVppProcessedPictures()
-{
-  auto it = m_bufferPool->processedPics.begin();
-  while (it != m_bufferPool->processedPics.end())
-  {
-    if (it->source == CVaapiProcessedPicture::VPP_SRC)
-    {
-      it = m_bufferPool->processedPics.erase(it);
-      m_config.stats->DecProcessed();
-    }
-    else
-      ++it;
-  }
-
-  it = m_bufferPool->processedPicsAway.begin();
-  while (it != m_bufferPool->processedPicsAway.end())
-  {
-    if (it->source == CVaapiProcessedPicture::VPP_SRC)
-    {
-      it = m_bufferPool->processedPicsAway.erase(it);
-    }
-    else
-      ++it;
-  }
-
-  m_controlPort.SendInMessage(COutputControlProtocol::STATS);
+  pic.source->ClearRef(pic);
+  pic.source = nullptr;
 }
 
 void COutput::QueueReturnPicture(CVaapiRenderPicture *pic)
@@ -2154,6 +2142,18 @@ void COutput::ReleaseBufferPool(bool precleanup)
   m_bufferPool->processedPics.clear();
 }
 
+void COutput::ReadyForDisposal(CPostproc *pp)
+{
+  for (auto it = m_discardedPostprocs.begin(); it != m_discardedPostprocs.end(); ++it)
+  {
+    if ((*it).get() == pp)
+    {
+      m_discardedPostprocs.erase(it);
+      break;
+    }
+  }
+}
+
 bool COutput::CheckSuccess(VAStatus status)
 {
   if (status != VA_STATUS_SUCCESS)
@@ -2189,11 +2189,12 @@ bool CSkipPostproc::AddPicture(CVaapiDecodedPicture &inPic)
 
 bool CSkipPostproc::Filter(CVaapiProcessedPicture &outPic)
 {
-  if (m_step>0)
+  if (m_step > 0)
     return false;
   outPic.DVDPic.SetParams(m_pic.DVDPic);
   outPic.videoSurface = m_pic.videoSurface;
-  outPic.source = CVaapiProcessedPicture::SKIP_SRC;
+  m_refsToSurfaces++;
+  outPic.source = this;
   outPic.DVDPic.iFlags &= ~(DVP_FLAG_TOP_FIELD_FIRST |
                             DVP_FLAG_REPEAT_TOP_FIELD |
                             DVP_FLAG_INTERLACED);
@@ -2201,9 +2202,13 @@ bool CSkipPostproc::Filter(CVaapiProcessedPicture &outPic)
   return true;
 }
 
-void CSkipPostproc::ClearRef(VASurfaceID surf)
+void CSkipPostproc::ClearRef(CVaapiProcessedPicture &pic)
 {
+  m_config.videoSurfaces->ClearRender(pic.videoSurface);
+  m_refsToSurfaces--;
 
+  if (m_pOut && m_refsToSurfaces <= 0)
+    (m_pOut->*m_cbDispose)(this);
 }
 
 void CSkipPostproc::Flush()
@@ -2211,7 +2216,7 @@ void CSkipPostproc::Flush()
 
 }
 
-bool CSkipPostproc::Compatible(EINTERLACEMETHOD method)
+bool CSkipPostproc::UpdateDeintMethod(EINTERLACEMETHOD method)
 {
   if (method == VS_INTERLACEMETHOD_NONE)
     return true;
@@ -2222,6 +2227,19 @@ bool CSkipPostproc::Compatible(EINTERLACEMETHOD method)
 bool CSkipPostproc::DoesSync()
 {
   return false;
+}
+
+bool CSkipPostproc::UseVideoSurface()
+{
+  return true;
+}
+
+void CSkipPostproc::Discard(COutput *output, ReadyToDispose cb)
+{
+  m_pOut = output;
+  m_cbDispose = cb;
+  if (m_refsToSurfaces <= 0)
+    (m_pOut->*m_cbDispose)(this);
 }
 
 //-----------------------------------------------------------------------------
@@ -2379,9 +2397,6 @@ bool CVppPostproc::Init(EINTERLACEMETHOD method)
   m_currentIdx = 0;
   m_frameCount = 0;
 
-//  if (method == VS_INTERLACEMETHOD_NONE)
-//    return true;
-
   VAProcFilterParameterBufferDeinterlacing filterparams;
   filterparams.type = VAProcFilterDeinterlacing;
   filterparams.algorithm = vppMethod;
@@ -2471,14 +2486,16 @@ bool CVppPostproc::Filter(CVaapiProcessedPicture &outPic)
   // clear reference in case we return false
   m_videoSurfaces.ClearReference(surf);
 
+  // move window of frames we are looking at to account for backward (=future) refs
+  const auto currentIdx = m_currentIdx - m_backwardRefs;
+
   // make sure we have all needed forward refs
-  if ((m_currentIdx - m_forwardRefs) < m_decodedPics.back().index)
+  if ((currentIdx - m_forwardRefs) < m_decodedPics.back().index)
   {
     Advance();
     return false;
   }
 
-  const auto currentIdx = m_currentIdx;
   auto it = std::find_if(m_decodedPics.begin(), m_decodedPics.end(),
                          [currentIdx](const CVaapiDecodedPicture &picture){
                            return picture.index == currentIdx;
@@ -2537,9 +2554,9 @@ bool CVppPostproc::Filter(CVaapiProcessedPicture &outPic)
   pipelineParams->num_forward_references = 0;
   pipelineParams->num_backward_references = 0;
 
-  int maxPic = m_currentIdx + m_backwardRefs;
-  int minPic = m_currentIdx - m_forwardRefs;
-  int curPic = m_currentIdx;
+  int maxPic = currentIdx + m_backwardRefs;
+  int minPic = currentIdx - m_forwardRefs;
+  int curPic = currentIdx;
 
   // deinterlace flag
   if (m_vppMethod != VS_INTERLACEMETHOD_NONE)
@@ -2639,7 +2656,7 @@ bool CVppPostproc::Filter(CVaapiProcessedPicture &outPic)
 
   m_step++;
   outPic.videoSurface = m_videoSurfaces.GetFree(surf);
-  outPic.source = CVaapiProcessedPicture::VPP_SRC;
+  outPic.source = this;
   outPic.DVDPic.iFlags &= ~(DVP_FLAG_TOP_FIELD_FIRST |
                             DVP_FLAG_REPEAT_TOP_FIELD |
                             DVP_FLAG_INTERLACED);
@@ -2655,7 +2672,7 @@ void CVppPostproc::Advance()
   auto it = m_decodedPics.begin();
   while (it != m_decodedPics.end())
   {
-    if (it->index < m_currentIdx - m_forwardRefs)
+    if (it->index < m_currentIdx - m_forwardRefs - m_backwardRefs)
     {
       m_config.videoSurfaces->ClearRender(it->videoSurface);
       it = m_decodedPics.erase(it);
@@ -2665,9 +2682,12 @@ void CVppPostproc::Advance()
   }
 }
 
-void CVppPostproc::ClearRef(VASurfaceID surf)
+void CVppPostproc::ClearRef(CVaapiProcessedPicture &pic)
 {
-  m_videoSurfaces.ClearReference(surf);
+  m_videoSurfaces.ClearReference(pic.videoSurface);
+
+  if (m_pOut && !m_videoSurfaces.HasRefs())
+    (m_pOut->*m_cbDispose)(this);
 }
 
 void CVppPostproc::Flush()
@@ -2681,8 +2701,12 @@ void CVppPostproc::Flush()
   }
 }
 
-bool CVppPostproc::Compatible(EINTERLACEMETHOD method)
+bool CVppPostproc::UpdateDeintMethod(EINTERLACEMETHOD method)
 {
+  // could try to update method, for now trigger deinit/init
+  if (method != m_vppMethod)
+    return false;
+
   if (method == VS_INTERLACEMETHOD_VAAPI_BOB ||
       method == VS_INTERLACEMETHOD_VAAPI_MADI ||
       method == VS_INTERLACEMETHOD_VAAPI_MACI ||
@@ -2704,6 +2728,19 @@ bool CVppPostproc::WantsPic()
     return true;
 
   return false;
+}
+
+bool CVppPostproc::UseVideoSurface()
+{
+  return true;
+}
+
+void CVppPostproc::Discard(COutput *output, ReadyToDispose cb)
+{
+  m_pOut = output;
+  m_cbDispose = cb;
+  if (!m_videoSurfaces.HasRefs())
+    (m_pOut->*m_cbDispose)(this);
 }
 
 bool CVppPostproc::CheckSuccess(VAStatus status)
@@ -2796,12 +2833,12 @@ bool CFFmpegPostproc::Init(EINTERLACEMETHOD method)
 {
   if (!(m_pFilterGraph = avfilter_graph_alloc()))
   {
-    CLog::Log(LOGERROR, "CFFmpegPostproc::Init - unable to alloc filter graph");
+    CLog::Log(LOGERROR, "VAAPI::CFFmpegPostproc::Init - unable to alloc filter graph");
     return false;
   }
 
-  AVFilter* srcFilter = avfilter_get_by_name("buffer");
-  AVFilter* outFilter = avfilter_get_by_name("buffersink");
+  const AVFilter* srcFilter = avfilter_get_by_name("buffer");
+  const AVFilter* outFilter = avfilter_get_by_name("buffersink");
 
   std::string args = StringUtils::Format("%d:%d:%d:%d:%d:%d:%d",
                                         m_config.vidWidth,
@@ -2814,7 +2851,7 @@ bool CFFmpegPostproc::Init(EINTERLACEMETHOD method)
 
   if (avfilter_graph_create_filter(&m_pFilterIn, srcFilter, "src", args.c_str(), NULL, m_pFilterGraph) < 0)
   {
-    CLog::Log(LOGERROR, "CFFmpegPostproc::Init - avfilter_graph_create_filter: src");
+    CLog::Log(LOGERROR, "VAAPI::CFFmpegPostproc::Init - avfilter_graph_create_filter: src");
     return false;
   }
 
@@ -2827,7 +2864,7 @@ bool CFFmpegPostproc::Init(EINTERLACEMETHOD method)
   enum AVPixelFormat pix_fmts[] = { AV_PIX_FMT_NV12, AV_PIX_FMT_NONE };
   if (av_opt_set_int_list(m_pFilterOut, "pix_fmts", pix_fmts,  AV_PIX_FMT_NONE, AV_OPT_SEARCH_CHILDREN) < 0)
   {
-    CLog::Log(LOGERROR, "CFFmpegPostproc::Init  - failed settings pix formats");
+    CLog::Log(LOGERROR, "VAAPI::CFFmpegPostproc::Init  - failed settings pix formats");
     return false;
   }
 
@@ -2852,7 +2889,7 @@ bool CFFmpegPostproc::Init(EINTERLACEMETHOD method)
 
     if (avfilter_graph_parse_ptr(m_pFilterGraph, filter.c_str(), &inputs, &outputs, NULL) < 0)
     {
-      CLog::Log(LOGERROR, "CFFmpegPostproc::Init  - avfilter_graph_parse");
+      CLog::Log(LOGERROR, "VAAPI::CFFmpegPostproc::Init  - avfilter_graph_parse");
       avfilter_inout_free(&outputs);
       avfilter_inout_free(&inputs);
       return false;
@@ -2863,14 +2900,14 @@ bool CFFmpegPostproc::Init(EINTERLACEMETHOD method)
 
     if (avfilter_graph_config(m_pFilterGraph, NULL) < 0)
     {
-      CLog::Log(LOGERROR, "CFFmpegPostproc::Init  - avfilter_graph_config");
+      CLog::Log(LOGERROR, "VAAPI::CFFmpegPostproc::Init  - avfilter_graph_config");
       return false;
     }
   }
   else if (method == VS_INTERLACEMETHOD_RENDER_BOB ||
            method == VS_INTERLACEMETHOD_NONE)
   {
-    CLog::Log(LOGDEBUG, LOGVIDEO, "CFFmpegPostproc::Init  - skip deinterlacing");
+    CLog::Log(LOGDEBUG, LOGVIDEO, "VAAPI::CFFmpegPostproc::Init  - skip deinterlacing");
     avfilter_inout_free(&outputs);
     avfilter_inout_free(&inputs);
   }
@@ -2920,6 +2957,9 @@ bool CFFmpegPostproc::AddPicture(CVaapiDecodedPicture &inPic)
     m_pFilterFrameIn->pts = AV_NOPTS_VALUE;
   else
     m_pFilterFrameIn->pts = (inPic.DVDPic.pts / DVD_TIME_BASE) * AV_TIME_BASE;
+
+  m_pFilterFrameIn->pkt_dts = m_pFilterFrameIn->pts;
+  m_pFilterFrameIn->best_effort_timestamp = m_pFilterFrameIn->pts;
 
   av_frame_get_buffer(m_pFilterFrameIn, 64);
 
@@ -2986,7 +3026,7 @@ bool CFFmpegPostproc::Filter(CVaapiProcessedPicture &outPic)
   else if (m_diMethod == VS_INTERLACEMETHOD_RENDER_BOB ||
            m_diMethod == VS_INTERLACEMETHOD_NONE)
   {
-    if (m_step>0)
+    if (m_step > 0)
       return false;
   }
 
@@ -2994,11 +3034,13 @@ bool CFFmpegPostproc::Filter(CVaapiProcessedPicture &outPic)
   outPic.frame = av_frame_clone(m_pFilterFrameOut);
   av_frame_unref(m_pFilterFrameOut);
 
-  outPic.source = CVaapiProcessedPicture::FFMPEG_SRC;
+  outPic.source = this;
+  m_refsToPics++;
 
-  if(outPic.frame->pts != AV_NOPTS_VALUE)
+  int64_t bpts = av_frame_get_best_effort_timestamp(outPic.frame);
+  if(bpts != AV_NOPTS_VALUE)
   {
-    outPic.DVDPic.pts = (double)outPic.frame->pts * DVD_TIME_BASE / AV_TIME_BASE;
+    outPic.DVDPic.pts = (double)bpts * DVD_TIME_BASE / AV_TIME_BASE;
   }
   else
     outPic.DVDPic.pts = DVD_NOPTS_VALUE;
@@ -3010,17 +3052,16 @@ bool CFFmpegPostproc::Filter(CVaapiProcessedPicture &outPic)
   }
   m_lastOutPts = pts;
 
-  //for (int i = 0; i < 4; i++)
-  //  outPic.DVDPic.data[i] = outPic.frame->data[i];
-  //for (int i = 0; i < 4; i++)
-  //  outPic.DVDPic.iLineSize[i] = outPic.frame->linesize[i];
-
   return true;
 }
 
-void CFFmpegPostproc::ClearRef(VASurfaceID surf)
+void CFFmpegPostproc::ClearRef(CVaapiProcessedPicture &pic)
 {
+  av_frame_free(&pic.frame);
+  m_refsToPics--;
 
+  if (m_pOut && m_refsToPics <= 0)
+    (m_pOut->*m_cbDispose)(this);
 }
 
 void CFFmpegPostproc::Close()
@@ -3040,8 +3081,12 @@ void CFFmpegPostproc::Flush()
   m_lastOutPts = DVD_NOPTS_VALUE;
 }
 
-bool CFFmpegPostproc::Compatible(EINTERLACEMETHOD method)
+bool CFFmpegPostproc::UpdateDeintMethod(EINTERLACEMETHOD method)
 {
+  // switching between certain methods should be done without deinit/init
+  if (method != m_diMethod)
+    return false;
+
   if (method == VS_INTERLACEMETHOD_DEINTERLACE)
     return true;
   else if (method == VS_INTERLACEMETHOD_RENDER_BOB)
@@ -3056,6 +3101,19 @@ bool CFFmpegPostproc::Compatible(EINTERLACEMETHOD method)
 bool CFFmpegPostproc::DoesSync()
 {
   return true;
+}
+
+bool CFFmpegPostproc::UseVideoSurface()
+{
+  return false;
+}
+
+void CFFmpegPostproc::Discard(COutput *output, ReadyToDispose cb)
+{
+  m_pOut = output;
+  m_cbDispose = cb;
+  if (m_refsToPics <= 0)
+    (m_pOut->*m_cbDispose)(this);
 }
 
 bool CFFmpegPostproc::CheckSuccess(VAStatus status)

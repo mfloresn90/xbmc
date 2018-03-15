@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2010-2013 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -93,11 +93,11 @@ void CAEBitstreamPacker::Pack(CAEStreamInfo &info, uint8_t* data, int size)
   }
 }
 
-void CAEBitstreamPacker::PackPause(CAEStreamInfo &info, unsigned int millis, bool iecBursts)
+bool CAEBitstreamPacker::PackPause(CAEStreamInfo &info, unsigned int millis, bool iecBursts)
 {
   // re-use last buffer
   if (m_pauseDuration == millis)
-    return;
+    return false;
 
   switch (info.m_type)
   {
@@ -125,6 +125,8 @@ void CAEBitstreamPacker::PackPause(CAEStreamInfo &info, unsigned int millis, boo
   {
     memset(m_packedBuffer, 0, m_dataSize);
   }
+
+  return true;
 }
 
 unsigned int CAEBitstreamPacker::GetSize()

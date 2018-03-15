@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2017 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -20,24 +20,23 @@
 
 #include "WinSystemWayland.h"
 
+#include "OptionalsReg.h"
 #include <algorithm>
 #include <limits>
 #include <numeric>
 
-#if defined(HAVE_LIBVA)
-#include <va/va_wayland.h>
-#endif
-
 #include "Application.h"
 #include "Connection.h"
+#include "cores/RetroPlayer/process/wayland/RPProcessInfoWayland.h"
 #include "cores/VideoPlayer/Process/wayland/ProcessInfoWayland.h"
 #include "guilib/DispResource.h"
 #include "guilib/LocalizeStrings.h"
 #include "input/InputManager.h"
 #include "input/touch/generic/GenericTouchActionHandler.h"
 #include "input/touch/generic/GenericTouchInputHandler.h"
-#include "linux/PlatformConstants.h"
-#include "linux/TimeUtils.h"
+#include "powermanagement/linux/LinuxPowerSyscall.h"
+#include "platform/linux/PlatformConstants.h"
+#include "platform/linux/TimeUtils.h"
 #include "messaging/ApplicationMessenger.h"
 #include "OSScreenSaverIdleInhibitUnstableV1.h"
 #include "Registry.h"
@@ -46,8 +45,10 @@
 #include "settings/DisplaySettings.h"
 #include "settings/Settings.h"
 #include "ShellSurfaceWlShell.h"
+#include "ShellSurfaceXdgShell.h"
 #include "ShellSurfaceXdgShellUnstableV6.h"
 #include "threads/SingleLock.h"
+#include "Util.h"
 #include "utils/log.h"
 #include "utils/MathUtils.h"
 #include "utils/StringUtils.h"
@@ -58,7 +59,7 @@
 #include "utils/ActorProtocol.h"
 #include "utils/TimeUtils.h"
 
-#if defined(HAVE_DBUS)
+#if defined(HAS_DBUS)
 # include "windowing/linux/OSScreenSaverFreedesktop.h"
 #endif
 
@@ -146,7 +147,33 @@ struct MsgBufferScale
 CWinSystemWayland::CWinSystemWayland()
 : CWinSystemBase{}, m_protocol{"WinSystemWaylandInternal"}
 {
-  m_eWindowSystem = WINDOW_SYSTEM_WAYLAND;
+  std::string envSink;
+  if (getenv("AE_SINK"))
+    envSink = getenv("AE_SINK");
+  if (StringUtils::EqualsNoCase(envSink, "ALSA"))
+  {
+    ::WAYLAND::ALSARegister();
+  }
+  else if (StringUtils::EqualsNoCase(envSink, "PULSE"))
+  {
+    ::WAYLAND::PulseAudioRegister();
+  }
+  else if (StringUtils::EqualsNoCase(envSink, "SNDIO"))
+  {
+    ::WAYLAND::SndioRegister();
+  }
+  else
+  {
+    if (!::WAYLAND::PulseAudioRegister())
+    {
+      if (!::WAYLAND::ALSARegister())
+      {
+        ::WAYLAND::SndioRegister();
+      }
+    }
+  }
+  m_winEvents.reset(new CWinEventsWayland());
+  CLinuxPowerSyscall::Register();
 }
 
 CWinSystemWayland::~CWinSystemWayland() noexcept
@@ -162,6 +189,7 @@ bool CWinSystemWayland::InitWindowSystem()
   });
 
   VIDEOPLAYER::CProcessInfoWayland::Register();
+  RETRO::CRPProcessInfoWayland::Register();
 
   CLog::LogF(LOGINFO, "Connecting to Wayland server");
   m_connection.reset(new CConnection);
@@ -214,6 +242,7 @@ bool CWinSystemWayland::DestroyWindowSystem()
   m_cursorTheme = wayland::cursor_theme_t{};
   m_outputsInPreparation.clear();
   m_outputs.clear();
+  m_frameCallback = wayland::callback_t{};
 
   if (m_registry)
   {
@@ -278,10 +307,14 @@ bool CWinSystemWayland::CreateNewWindow(const std::string& name,
   // Try with this resolution if compositor does not say otherwise
   UpdateSizeVariables({res.iWidth, res.iHeight}, m_scale, m_shellSurfaceState, false);
 
-  m_shellSurface.reset(CShellSurfaceXdgShellUnstableV6::TryCreate(*this, *m_connection, m_surface, name, KODI::LINUX::DESKTOP_FILE_NAME));
+  m_shellSurface.reset(CShellSurfaceXdgShell::TryCreate(*this, *m_connection, m_surface, name, KODI::LINUX::DESKTOP_FILE_NAME));
   if (!m_shellSurface)
   {
-    CLog::LogF(LOGWARNING, "Compositor does not support xdg_shell unstable v6 protocol - falling back to wl_shell, not all features might work");
+    m_shellSurface.reset(CShellSurfaceXdgShellUnstableV6::TryCreate(*this, *m_connection, m_surface, name, KODI::LINUX::DESKTOP_FILE_NAME));
+  }
+  if (!m_shellSurface)
+  {
+    CLog::LogF(LOGWARNING, "Compositor does not support xdg_shell protocol (stable or unstable v6) - falling back to wl_shell, not all features might work");
     m_shellSurface.reset(new CShellSurfaceWlShell(*this, *m_connection, m_surface, name, KODI::LINUX::DESKTOP_FILE_NAME));
   }
 
@@ -307,6 +340,10 @@ bool CWinSystemWayland::CreateNewWindow(const std::string& name,
 
   // Apply window decorations if necessary
   m_windowDecorator->SetState(m_configuredSize, m_scale, m_shellSurfaceState);
+
+  // Set initial opaque region and window geometry
+  ApplyOpaqueRegion();
+  ApplyWindowGeometry();
 
   // Update resolution with real size as it could have changed due to configure()
   UpdateDesktopResolution(res, 0, m_bufferSize.Width(), m_bufferSize.Height(), res.fRefreshRate);
@@ -481,7 +518,7 @@ std::shared_ptr<COutput> CWinSystemWayland::FindOutputByWaylandOutput(wayland::o
 {
   CSingleLock lock(m_outputsMutex);
   auto outputIt = std::find_if(m_outputs.begin(), m_outputs.end(),
-                               [this, &output](decltype(m_outputs)::value_type const& entry)
+                               [&output](decltype(m_outputs)::value_type const& entry)
                                {
                                  return (output == entry.second->GetWaylandOutput());
                                });
@@ -612,23 +649,33 @@ void CWinSystemWayland::ApplySizeUpdate(SizeUpdateInformation update)
   }
   if (update.surfaceSizeChanged)
   {
-    // Mark everything opaque so the compositor can render it faster
-    // Do it here so size always matches the configured egl surface
-    CLog::LogF(LOGDEBUG, "Setting opaque region size %dx%d", m_surfaceSize.Width(), m_surfaceSize.Height());
-    wayland::region_t opaqueRegion{m_compositor.create_region()};
-    opaqueRegion.add(0, 0, m_surfaceSize.Width(), m_surfaceSize.Height());
-    m_surface.set_opaque_region(opaqueRegion);
+    // Update opaque region here so size always matches the configured egl surface
+    ApplyOpaqueRegion();
   }
   if (update.configuredSizeChanged)
   {
     // Update window decoration state
     m_windowDecorator->SetState(m_configuredSize, m_scale, m_shellSurfaceState);
-    m_shellSurface->SetWindowGeometry(m_windowDecorator->GetWindowGeometry());
+    ApplyWindowGeometry();
   }
   // Set always, because of initialization order GL context has to keep track of
   // whether the size changed. If we skip based on update.bufferSizeChanged here,
   // GL context will never get its initial size set.
   SetContextSize(m_bufferSize);
+}
+
+void CWinSystemWayland::ApplyOpaqueRegion()
+{
+  // Mark everything opaque so the compositor can render it faster
+  CLog::LogF(LOGDEBUG, "Setting opaque region size %dx%d", m_surfaceSize.Width(), m_surfaceSize.Height());
+  wayland::region_t opaqueRegion{m_compositor.create_region()};
+  opaqueRegion.add(0, 0, m_surfaceSize.Width(), m_surfaceSize.Height());
+  m_surface.set_opaque_region(opaqueRegion);
+}
+
+void CWinSystemWayland::ApplyWindowGeometry()
+{
+  m_shellSurface->SetWindowGeometry(m_windowDecorator->GetWindowGeometry());
 }
 
 void CWinSystemWayland::ProcessMessages()
@@ -829,7 +876,8 @@ void CWinSystemWayland::SetResolutionInternal(CSizeInt size, std::int32_t scale,
         XBMC_Event msg{XBMC_MODECHANGE};
         msg.mode.res = RES_WINDOW;
         SetWindowResolution(sizes.bufferSize.Width(), sizes.bufferSize.Height());
-        CWinEvents::MessagePush(&msg);
+        // FIXME
+        dynamic_cast<CWinEventsWayland&>(*m_winEvents).MessagePush(&msg);
         m_waitingForApply = true;
         CLog::LogF(LOGDEBUG, "Queued change to windowed mode size %dx%d", sizes.bufferSize.Width(), sizes.bufferSize.Height());
       }
@@ -837,7 +885,8 @@ void CWinSystemWayland::SetResolutionInternal(CSizeInt size, std::int32_t scale,
       {
         XBMC_Event msg{XBMC_VIDEORESIZE};
         msg.resize = {sizes.bufferSize.Width(), sizes.bufferSize.Height()};
-        CWinEvents::MessagePush(&msg);
+        // FIXME
+        dynamic_cast<CWinEventsWayland&>(*m_winEvents).MessagePush(&msg);
         m_waitingForApply = true;
         CLog::LogF(LOGDEBUG, "Queued change to windowed buffer size %dx%d", sizes.bufferSize.Width(), sizes.bufferSize.Height());
       }
@@ -859,7 +908,8 @@ void CWinSystemWayland::SetResolutionInternal(CSizeInt size, std::int32_t scale,
 
       XBMC_Event msg{XBMC_MODECHANGE};
       msg.mode.res = res;
-      CWinEvents::MessagePush(&msg);
+      // FIXME
+      dynamic_cast<CWinEventsWayland&>(*m_winEvents).MessagePush(&msg);
       m_waitingForApply = true;
       CLog::LogF(LOGDEBUG, "Queued change to resolution %d surface size %dx%d scale %d state %s", res, sizes.surfaceSize.Width(), sizes.surfaceSize.Height(), scale, IShellSurface::StateToString(state).c_str());
     }
@@ -1043,7 +1093,7 @@ void CWinSystemWayland::LoadDefaultCursor()
     wayland::cursor_t cursor;
     try
     {
-      cursor = m_cursorTheme.get_cursor("default");
+      cursor = CCursorUtil::LoadFromTheme(m_cursorTheme, "default");
     }
     catch (std::exception const& e)
     {
@@ -1171,7 +1221,8 @@ void CWinSystemWayland::OnLeave(std::uint32_t seatGlobalName, InputType type)
 
 void CWinSystemWayland::OnEvent(std::uint32_t seatGlobalName, InputType type, XBMC_Event& event)
 {
-  CWinEvents::MessagePush(&event);
+  // FIXME
+  dynamic_cast<CWinEventsWayland&>(*m_winEvents).MessagePush(&event);
 }
 
 void CWinSystemWayland::OnSetCursor(wayland::pointer_t& pointer, std::uint32_t serial)
@@ -1306,6 +1357,43 @@ void CWinSystemWayland::PrepareFramePresentation()
       m_surfaceSubmissions.erase(iter);
     };
   }
+
+  // Now wait for the frame callback that tells us that it is a good time to start drawing
+  //
+  // To sum up, we:
+  // 1. wait until a frame() drawing hint from the compositor arrives,
+  // 2. request a new frame() hint for the next presentation
+  // 2. then commit the backbuffer to the surface and immediately
+  //    return, i.e. drawing can start again
+  // This means that rendering is optimized for maximum time available for
+  // our repaint and reliable timing rather than latency. With weston, latency
+  // will usually be on the order of two frames plus a few milliseconds.
+  // The frame timings become irregular though when nothing is rendered because
+  // kodi then sleeps for a fixed time without swapping buffers. This makes us
+  // immediately attach the next buffer because the frame callback has already arrived when
+  // this function is called and step 1. above is skipped. As we render with full
+  // FPS during video playback anyway and the timing is otherwise not relevant,
+  // this should not be a problem.
+  if (m_frameCallback)
+  {
+    // If the window is e.g. minimized, chances are that we will *never* get frame
+    // callbacks from the compositor for optimization reasons.
+    // Still, the app should remain functional, which means that we can't
+    // just block forever here - if the render thread is blocked, Kodi will not
+    // function normally. It would also be impossible to close the application
+    // while it is minimized (since the wait needs to be interrupted for that).
+    // -> Use Wait with timeout here so we can maintain a reasonable frame rate
+    //    even when the window is not visible and we do not get any frame callbacks.
+    m_frameCallbackEvent.WaitMSec(50);
+    m_frameCallbackEvent.Reset();
+  }
+
+  // Get frame callback event for checking in the next call to this function
+  m_frameCallback = m_surface.frame();
+  m_frameCallback.on_done() = [this](std::uint32_t)
+  {
+    m_frameCallbackEvent.Set();
+  };
 }
 
 void CWinSystemWayland::FinishFramePresentation()
@@ -1348,7 +1436,7 @@ std::unique_ptr<CVideoSync> CWinSystemWayland::GetVideoSync(void* clock)
   if (m_surface && m_presentation)
   {
     CLog::LogF(LOGINFO, "Using presentation protocol for video sync");
-    return std::unique_ptr<CVideoSync>(new CVideoSyncWpPresentation(clock));
+    return std::unique_ptr<CVideoSync>(new CVideoSyncWpPresentation(clock, *this));
   }
   else
   {
@@ -1356,13 +1444,6 @@ std::unique_ptr<CVideoSync> CWinSystemWayland::GetVideoSync(void* clock)
     return nullptr;
   }
 }
-
-#if defined(HAVE_LIBVA)
-void* CWinSystemWayland::GetVaDisplay()
-{
-  return vaGetDisplayWl(m_connection->GetDisplay());
-}
-#endif
 
 std::unique_ptr<IOSScreenSaver> CWinSystemWayland::GetOSScreenSaverImpl()
 {
@@ -1377,7 +1458,7 @@ std::unique_ptr<IOSScreenSaver> CWinSystemWayland::GetOSScreenSaverImpl()
     }
   }
 
-#if defined(HAVE_DBUS)
+#if defined(HAS_DBUS)
   if (KODI::WINDOWING::LINUX::COSScreenSaverFreedesktop::IsAvailable())
   {
     CLog::LogF(LOGINFO, "Using freedesktop.org DBus interface for screen saver inhibition");
@@ -1386,7 +1467,7 @@ std::unique_ptr<IOSScreenSaver> CWinSystemWayland::GetOSScreenSaverImpl()
 #endif
 
   CLog::LogF(LOGINFO, "No supported method for screen saver inhibition found");
-  return nullptr;
+  return std::unique_ptr<IOSScreenSaver>(new CDummyOSScreenSaver);
 }
 
 std::string CWinSystemWayland::GetClipboardText()

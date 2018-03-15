@@ -2,7 +2,7 @@
 
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -24,10 +24,10 @@
 
 #include "cores/VideoPlayer/VideoRenderers/BaseRenderer.h"
 #include "cores/VideoPlayer/VideoRenderers/OverlayRenderer.h"
-#include "guilib/Geometry.h"
+#include "utils/Geometry.h"
 #include "guilib/Resolution.h"
 #include "threads/CriticalSection.h"
-#include "settings/VideoSettings.h"
+#include "cores/VideoSettings.h"
 #include "OverlayRenderer.h"
 #include "DebugRenderer.h"
 #include <deque>
@@ -60,6 +60,7 @@ protected:
   virtual void UpdateRenderBuffers(int queued, int discard, int free) = 0;
   virtual void UpdateGuiRender(bool gui) = 0;
   virtual void UpdateVideoRender(bool video) = 0;
+  virtual CVideoSettings GetVideoSettings() = 0;
 };
 
 class CRenderManager
@@ -77,7 +78,7 @@ public:
   bool IsVideoLayer();
   RESOLUTION GetResolution();
   void UpdateResolution();
-  void TriggerUpdateResolution(float fps, int width, int flags);
+  void TriggerUpdateResolution(float fps, int width, std::string &stereomode);
   void SetViewMode(int iViewMode);
   void PreInit();
   void UnInit();
@@ -96,19 +97,8 @@ public:
 
   int GetSkippedFrames()  { return m_QueueSkip; }
 
-  // Functions called from mplayer
-  /**
-   * Called by video player to configure renderer
-   * @param picture
-   * @param fps frames per second of video
-   * @param flags see RenderFlags.h
-   * @param orientation
-   * @param numbers of kept buffer references
-   */
-  bool Configure(const VideoPicture& picture, float fps, unsigned flags, unsigned int orientation, int buffers = 0);
-
+  bool Configure(const VideoPicture& picture, float fps, bool fullscreen, unsigned int orientation, int buffers = 0);
   bool AddVideoPicture(const VideoPicture& picture, volatile std::atomic_bool& bStop, EINTERLACEMETHOD deintMethod, bool wait);
-
   void AddOverlay(CDVDOverlay* o, double pts);
 
   /**
@@ -116,8 +106,6 @@ public:
    * AddVideoPicture and AddOverlay. It waits for max 50 ms before it returns -1
    * in case no buffer is available. Player may call this in a loop and decides
    * by itself when it wants to drop a frame.
-   * If no buffering is requested in Configure, player does not need to call this,
-   * because FlipPage will block.
    */
   int WaitForBuffer(volatile std::atomic_bool& bStop, int timeout = 100);
 
@@ -134,6 +122,8 @@ public:
 
   void SetDelay(int delay) { m_videoDelay = delay; };
   int GetDelay() { return m_videoDelay; };
+
+  void SetVideoSettings(CVideoSettings settings);
 
 protected:
 
@@ -153,8 +143,6 @@ protected:
   void UpdateLatencyTweak();
   void CheckEnableClockSync();
 
-  void FlipPage(volatile std::atomic_bool& bStop, double pts, EINTERLACEMETHOD deintMethod, EFIELDSYNC sync, bool wait);
-
   CBaseRenderer *m_pRenderer = nullptr;
   OVERLAY::CRenderer m_overlays;
   CDebugRenderer m_debugRenderer;
@@ -163,8 +151,6 @@ protected:
   CCriticalSection m_datalock;
   bool m_bTriggerUpdateResolution = false;
   bool m_bRenderGUI = true;
-  int m_waitForBufferCount = 0;
-  int m_rendermethod = 0;
   bool m_renderedOverlay = false;
   bool m_renderDebug = false;
   XbmcThreads::EndTime m_debugTimer;
@@ -183,7 +169,6 @@ protected:
   {
     PRESENT_METHOD_SINGLE = 0,
     PRESENT_METHOD_BLEND,
-    PRESENT_METHOD_WEAVE,
     PRESENT_METHOD_BOB,
   };
 
@@ -193,7 +178,7 @@ protected:
     STATE_CONFIGURING,
     STATE_CONFIGURED,
   };
-  ERENDERSTATE m_renderState;
+  ERENDERSTATE m_renderState = STATE_UNCONFIGURED;
   CEvent m_stateEvent;
 
   /// Display latency tweak value from AdvancedSettings for the current refresh rate
@@ -222,10 +207,11 @@ protected:
   unsigned int m_height = 0;
   unsigned int m_dwidth = 0;
   unsigned int m_dheight = 0;
-  unsigned int m_flags = 0;
   float m_fps = 0.0;
   unsigned int m_orientation = 0;
   int m_NumberBuffers = 0;
+  bool m_fullscreen = false;
+  std::string m_stereomode;
 
   int m_lateframes = -1;
   double m_presentpts = 0.0;
@@ -233,8 +219,10 @@ protected:
   XbmcThreads::EndTime m_presentTimer;
   bool m_forceNext = false;
   int m_presentsource = 0;
+  int m_presentsourcePast = -1;
   XbmcThreads::ConditionVariable m_presentevent;
   CEvent m_flushEvent;
+  CEvent m_initEvent;
   CDVDClock &m_dvdClock;
   IRenderMsg *m_playerPort;
 

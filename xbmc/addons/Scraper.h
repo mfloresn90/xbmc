@@ -1,7 +1,7 @@
 #pragma once
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -139,7 +139,7 @@ public:
   CScraperUrl ResolveIDToUrl(const std::string &externalID);
 
   std::vector<CScraperUrl> FindMovie(XFILE::CCurlFile &fcurl,
-    const std::string &sMovie, bool fFirst);
+    const std::string &movieTitle, int movieYear, bool fFirst);
   std::vector<MUSIC_GRABBER::CMusicAlbumInfo> FindAlbum(XFILE::CCurlFile &fcurl,
     const std::string &sAlbum, const std::string &sArtist = "");
   std::vector<MUSIC_GRABBER::CMusicArtistInfo> FindArtist(
@@ -155,10 +155,10 @@ public:
   bool GetArtwork(XFILE::CCurlFile &fcurl, CVideoInfoTag &details);
 
 private:
-  CScraper(const CScraper &rhs);
-  CScraper& operator=(const CScraper&);
-  CScraper(CScraper&&);
-  CScraper& operator=(CScraper&&);
+  CScraper(const CScraper &rhs) = delete;
+  CScraper& operator=(const CScraper&) = delete;
+  CScraper(CScraper&&) = delete;
+  CScraper& operator=(CScraper&&) = delete;
 
   std::string SearchStringEncoding() const
     { return m_parser.GetSearchStringEncoding(); }

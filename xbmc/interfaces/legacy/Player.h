@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -90,8 +90,7 @@ namespace XBMCAddon
       //  construction of a Player needs to identify whether or not any 
       //  callbacks will be executed asynchronously or not.
       explicit Player(int playerCore = 0);
-      //! @todo Switch to 'override' usage once 14.04 (Trusty) hits EOL. swig <3.0 doesn't understand C++11
-      virtual ~Player(void);
+      ~Player(void) override;
 #endif
 
 #ifdef DOXYGEN_SHOULD_USE_THIS
@@ -252,6 +251,20 @@ namespace XBMCAddon
       onPlayBackStopped();
 #else
       virtual void onPlayBackStopped();
+#endif
+
+#ifdef DOXYGEN_SHOULD_USE_THIS
+      ///
+      /// \ingroup python_PlayerCB
+      /// @brief \python_func{ onPlayBackError() }
+      ///-----------------------------------------------------------------------
+      /// onPlayBackError method.
+      ///
+      /// Will be called when playback stops due to an error.
+      ///
+      onPlayBackError();
+#else
+      virtual void onPlayBackError();
 #endif
 
 #ifdef DOXYGEN_SHOULD_USE_THIS
@@ -561,6 +574,38 @@ namespace XBMCAddon
       void setSubtitleStream(int iStream);
 #endif
 
+      // Player_UpdateInfoTag
+#ifdef DOXYGEN_SHOULD_USE_THIS
+      ///
+      /// \ingroup python_Player
+      /// @brief \python_func{ updateInfoTag(item) }
+      ///-----------------------------------------------------------------------
+      /// Update info labels for currently playing item.
+      ///
+      /// @param item ListItem with new info
+      ///
+      /// @throws Exception          If player is not playing a file
+      ///
+      ///-----------------------------------------------------------------------
+      /// @python_v18 New function added.
+      ///-----------------------------------------------------------------------
+      ///
+      /// **Example:**
+      /// ~~~~~~~~~~~~~{.py}
+      /// ...
+      /// item = xbmcgui.ListItem()
+      /// item.setPath(xbmc.Player().getPlayingFile())
+      /// item.setInfo('music', {'title' : 'foo', 'artist' : 'bar'})
+      /// xbmc.Player().updateInfoTag(item)
+      /// ...
+      /// ~~~~~~~~~~~~~
+      ///
+      updateInfoTag();
+#else
+      void updateInfoTag(const XBMCAddon::xbmcgui::ListItem* item);
+#endif
+
+
 #ifdef DOXYGEN_SHOULD_USE_THIS
       ///
       /// \ingroup python_Player
@@ -614,7 +659,7 @@ namespace XBMCAddon
       ///
       getRadioRDSInfoTag();
 #else
-      InfoTagRadioRDS* getRadioRDSInfoTag() throw (PlayerException);
+      InfoTagRadioRDS* getRadioRDSInfoTag();
 #endif
 
 #ifdef DOXYGEN_SHOULD_USE_THIS
@@ -712,9 +757,10 @@ namespace XBMCAddon
 #endif
 
 #if !defined SWIG && !defined DOXYGEN_SHOULD_SKIP_THIS
-      SWIGHIDDENVIRTUAL void OnPlayBackStarted() override;
+      SWIGHIDDENVIRTUAL void OnPlayBackStarted(const CFileItem &file) override;
       SWIGHIDDENVIRTUAL void OnPlayBackEnded() override;
       SWIGHIDDENVIRTUAL void OnPlayBackStopped() override;
+      SWIGHIDDENVIRTUAL void OnPlayBackError() override;
       SWIGHIDDENVIRTUAL void OnPlayBackPaused() override;
       SWIGHIDDENVIRTUAL void OnPlayBackResumed() override;
       SWIGHIDDENVIRTUAL void OnQueueNextItem() override;

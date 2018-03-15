@@ -22,7 +22,7 @@
 
 #ifdef TARGET_WINDOWS
 
-#define LINE_ENDING "\r\n"
+#include <windows.h>
 
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
@@ -40,9 +40,6 @@ typedef intptr_t      ssize_t;
 #define SSIZE_MAX INTPTR_MAX
 #endif // !SSIZE_MAX
 
-#if _MSC_VER < 1900
-#define snprintf _snprintf
-#endif
 #define ftello64 _ftelli64
 #define fseeko64 _fseeki64
 #ifndef strcasecmp
@@ -52,8 +49,10 @@ typedef intptr_t      ssize_t;
 #define strncasecmp strnicmp
 #endif
 
+#if defined TARGET_WINDOWS_DESKTOP
 #define popen   _popen
 #define pclose  _pclose
+#endif
 
 #if 0
 // big endian
@@ -61,31 +60,12 @@ typedef intptr_t      ssize_t;
 #define PIXEL_RSHIFT 8
 #define PIXEL_GSHIFT 16
 #define PIXEL_BSHIFT 24
-#define AMASK 0x000000ff
-#define RMASK 0x0000ff00
-#define GMASK 0x00ff0000
-#define BMASK 0xff000000
 #else
 // little endian
 #define PIXEL_ASHIFT 24
 #define PIXEL_RSHIFT 16
 #define PIXEL_GSHIFT 8
 #define PIXEL_BSHIFT 0
-#define AMASK 0xff000000
-#define RMASK 0x00ff0000
-#define GMASK 0x0000ff00
-#define BMASK 0x000000ff
-#endif
-
-#if _MSC_VER < 1800
-#ifndef va_copy
-#define va_copy(dst, src) ((dst) = (src))
-#endif
-
-#define lrint(x) ((x) >= 0 ? ((int)((x) + 0.5)) : ((int)((x) - 0.5)))
-#define llrint(x) ((x) >= 0 ? ((__int64)((x) + 0.5)) : ((__int64)((x) - 0.5)))
-
-#define strtoll(p, e, b) _strtoi64(p, e, b)
 #endif
 
 extern "C" char * strptime(const char *buf, const char *fmt, struct tm *tm);

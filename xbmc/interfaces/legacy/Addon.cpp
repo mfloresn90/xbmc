@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -21,6 +21,7 @@
 #include "Addon.h"
 #include "LanguageHook.h"
 
+#include "ServiceBroker.h"
 #include "addons/AddonManager.h"
 #include "addons/settings/GUIDialogAddonSettings.h"
 #include "guilib/GUIWindowManager.h"
@@ -71,15 +72,15 @@ namespace XBMCAddon
       if (id.empty())
         throw AddonException("No valid addon id could be obtained. None was passed and the script wasn't executed in a normal xbmc manner.");
 
-      if (!ADDON::CAddonMgr::GetInstance().GetAddon(id.c_str(), pAddon))
+      if (!CServiceBroker::GetAddonMgr().GetAddon(id.c_str(), pAddon))
         throw AddonException("Unknown addon id '%s'.", id.c_str());
 
-      CAddonMgr::GetInstance().AddToUpdateableAddons(pAddon);
+      CServiceBroker::GetAddonMgr().AddToUpdateableAddons(pAddon);
     }
 
     Addon::~Addon()
     {
-      CAddonMgr::GetInstance().RemoveFromUpdateableAddons(pAddon);
+      CServiceBroker::GetAddonMgr().RemoveFromUpdateableAddons(pAddon);
     }
 
     String Addon::getLocalizedString(int id)
@@ -92,7 +93,7 @@ namespace XBMCAddon
       return pAddon->GetSetting(id);
     }
 
-    bool Addon::getSettingBool(const char* id) throw(XBMCAddon::WrongTypeException)
+    bool Addon::getSettingBool(const char* id)
     {
       bool value = false;
       if (!pAddon->GetSettingBool(id, value))
@@ -101,7 +102,7 @@ namespace XBMCAddon
       return value;
     }
 
-    int Addon::getSettingInt(const char* id) throw(XBMCAddon::WrongTypeException)
+    int Addon::getSettingInt(const char* id)
     {
       int value = 0;
       if (!pAddon->GetSettingInt(id, value))
@@ -110,7 +111,7 @@ namespace XBMCAddon
       return value;
     }
 
-    double Addon::getSettingNumber(const char* id) throw(XBMCAddon::WrongTypeException)
+    double Addon::getSettingNumber(const char* id)
     {
       double value = 0.0;
       if (!pAddon->GetSettingNumber(id, value))
@@ -119,7 +120,7 @@ namespace XBMCAddon
       return value;
     }
 
-    String Addon::getSettingString(const char* id) throw(XBMCAddon::WrongTypeException)
+    String Addon::getSettingString(const char* id)
     {
       std::string value;
       if (!pAddon->GetSettingString(id, value))
@@ -139,7 +140,7 @@ namespace XBMCAddon
       }
     }
 
-    bool Addon::setSettingBool(const char* id, bool value) throw(XBMCAddon::WrongTypeException)
+    bool Addon::setSettingBool(const char* id, bool value)
     {
       DelayedCallGuard dcguard(languageHook);
       ADDON::AddonPtr addon(pAddon);
@@ -154,7 +155,7 @@ namespace XBMCAddon
       return true;
     }
 
-    bool Addon::setSettingInt(const char* id, int value) throw(XBMCAddon::WrongTypeException)
+    bool Addon::setSettingInt(const char* id, int value)
     {
       DelayedCallGuard dcguard(languageHook);
       ADDON::AddonPtr addon(pAddon);
@@ -169,7 +170,7 @@ namespace XBMCAddon
       return true;
     }
 
-    bool Addon::setSettingNumber(const char* id, double value) throw(XBMCAddon::WrongTypeException)
+    bool Addon::setSettingNumber(const char* id, double value)
     {
       DelayedCallGuard dcguard(languageHook);
       ADDON::AddonPtr addon(pAddon);
@@ -184,7 +185,7 @@ namespace XBMCAddon
       return true;
     }
 
-    bool Addon::setSettingString(const char* id, const String& value) throw(XBMCAddon::WrongTypeException)
+    bool Addon::setSettingString(const char* id, const String& value)
     {
       DelayedCallGuard dcguard(languageHook);
       ADDON::AddonPtr addon(pAddon);

@@ -9,7 +9,7 @@
 
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -32,7 +32,7 @@
 #include <vector>
 
 #include "utils/auto_buffer.h"
-#include "Geometry.h"
+#include "utils/Geometry.h"
 
 #ifdef HAS_DX
 #include "DirectXMath.h"
@@ -202,8 +202,8 @@ protected:
 private:
   virtual bool FirstBegin() = 0;
   virtual void LastEnd() = 0;
-  CGUIFontTTFBase(const CGUIFontTTFBase&);
-  CGUIFontTTFBase& operator=(const CGUIFontTTFBase&);
+  CGUIFontTTFBase(const CGUIFontTTFBase&) = delete;
+  CGUIFontTTFBase& operator=(const CGUIFontTTFBase&) = delete;
   int m_referenceCount;
 };
 

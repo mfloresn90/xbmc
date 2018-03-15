@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -23,14 +23,15 @@
 #include "ServiceBroker.h"
 #include "DVDCodecs/Audio/DVDAudioCodec.h"
 #include "DVDCodecs/DVDFactoryCodec.h"
-#include "DVDDemuxers/DVDDemuxPacket.h"
+#include "cores/VideoPlayer/Interface/Addon/DemuxPacket.h"
 #include "settings/Settings.h"
+#include "system.h"
 #include "utils/log.h"
 #include "utils/MathUtils.h"
 #include "cores/AudioEngine/Interfaces/AE.h"
 #include "cores/AudioEngine/Utils/AEUtil.h"
 #ifdef TARGET_RASPBERRY_PI
-#include "linux/RBP.h"
+#include "platform/linux/RBP.h"
 #endif
 
 #include <sstream>
@@ -315,7 +316,12 @@ void CVideoPlayerAudio::Process()
       CLog::Log(LOGDEBUG, "CVideoPlayerAudio - CDVDMsg::GENERAL_RESYNC(%f), level: %d, cache: %f",
                 pts, m_messageQueue.GetLevel(), m_audioSink.GetDelay());
 
-      m_audioClock = pts + m_audioSink.GetDelay();
+      double delay = m_audioSink.GetDelay();
+      if (pts > m_audioClock - delay + 0.5 * DVD_TIME_BASE)
+      {
+        m_audioSink.Flush();
+      }
+      m_audioClock = pts + delay;
       if (m_speed != DVD_PLAYSPEED_PAUSE)
         m_audioSink.Resume();
       m_syncState = IDVDStreamPlayer::SYNC_INSYNC;
@@ -473,6 +479,8 @@ bool CVideoPlayerAudio::ProcessDecoderOutput(DVDAudioFrame &audioframe)
       if (!m_audioSink.Create(audioframe, m_streaminfo.codec, m_setsynctype == SYNC_RESAMPLE))
         CLog::Log(LOGERROR, "%s - failed to create audio renderer", __FUNCTION__);
 
+      m_audioSink.SetDynamicRangeCompression((long)(m_processInfo.GetVideoSettings().m_VolumeAmplification * 100));
+
       if (m_syncState == IDVDStreamPlayer::SYNC_INSYNC)
         m_audioSink.Resume();
     }
@@ -501,18 +509,18 @@ bool CVideoPlayerAudio::ProcessDecoderOutput(DVDAudioFrame &audioframe)
   audioframe.framesOut += framesOutput;
 
   // signal to our parent that we have initialized
-  if(m_syncState == IDVDStreamPlayer::SYNC_STARTING)
+  if (m_syncState == IDVDStreamPlayer::SYNC_STARTING)
   {
-    double cachetotal = DVD_SEC_TO_TIME(m_audioSink.GetCacheTotal());
-    double cachetime = m_audioSink.GetDelay();
-    if (cachetime >= cachetotal * 0.5)
+    double cachetotal = m_audioSink.GetCacheTotal();
+    double cachetime = m_audioSink.GetCacheTime();
+    if (cachetime >= cachetotal * 0.75)
     {
       m_syncState = IDVDStreamPlayer::SYNC_WAITSYNC;
       m_stalled = false;
       SStartMsg msg;
       msg.player = VideoPlayer_AUDIO;
-      msg.cachetotal = cachetotal;
-      msg.cachetime = cachetime;
+      msg.cachetotal = m_audioSink.GetMaxDelay() * DVD_TIME_BASE;
+      msg.cachetime = m_audioSink.GetDelay();
       msg.timestamp = audioframe.hasTimestamp ? audioframe.pts : DVD_NOPTS_VALUE;
       m_messageParent.Put(new CDVDMsgType<SStartMsg>(CDVDMsg::PLAYER_STARTED, msg));
 

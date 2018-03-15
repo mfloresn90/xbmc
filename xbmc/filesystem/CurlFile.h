@@ -1,7 +1,7 @@
 #pragma once
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -62,13 +62,14 @@ namespace XFILE
       ssize_t Read(void* lpBuf, size_t uiBufSize) override { return m_state->Read(lpBuf, uiBufSize); }
       ssize_t Write(const void* lpBuf, size_t uiBufSize) override;
       const std::string GetProperty(XFILE::FileProperty type, const std::string &name = "") const override;
+      const std::vector<std::string> GetPropertyValues(XFILE::FileProperty type, const std::string &name = "") const override;
       int IoControl(EIoControl request, void* param) override;
       double GetDownloadSpeed() override;
 
       bool Post(const std::string& strURL, const std::string& strPostData, std::string& strHTML);
       bool Get(const std::string& strURL, std::string& strHTML);
       bool ReadData(std::string& strHTML);
-      bool Download(const std::string& strURL, const std::string& strFileName, LPDWORD pdwSize = NULL);
+      bool Download(const std::string& strURL, const std::string& strFileName, unsigned int* pdwSize = NULL);
       bool IsInternet();
       void Cancel();
       void Reset();
@@ -184,6 +185,7 @@ namespace XFILE
       std::string m_cipherlist;
       bool m_ftppasvip;
       int m_connecttimeout;
+      int m_redirectlimit;
       int m_lowspeedtime;
       bool m_opened;
       bool m_forWrite;

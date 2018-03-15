@@ -182,7 +182,7 @@ msgstr "Veldu hvaða tegund og bættu við reglum til að útbúa snjallan-spilu
 
 msgctxt "#31044"
 msgid "Add group"
-msgstr "Bæta við hóp"
+msgstr "Bæta við hópi"
 
 msgctxt "#31045"
 msgid "Rename group"
@@ -190,7 +190,7 @@ msgstr "Endurnefna hóp"
 
 msgctxt "#31046"
 msgid "Delete group"
-msgstr "Eyða hóp"
+msgstr "Eyða hópi"
 
 msgctxt "#31048"
 msgid "Available"
@@ -199,10 +199,6 @@ msgstr "Tiltækt"
 msgctxt "#31050"
 msgid "Press [B]OK[/B] to stop"
 msgstr "Ýttu á [B]OK[/B] til að stoppa"
-
-msgctxt "#31051"
-msgid "Toggle language"
-msgstr "Víxla tungumáli"
 
 msgctxt "#31052"
 msgid "filtered"
@@ -314,7 +310,7 @@ msgstr "Nota rennslishreyfingar"
 
 msgctxt "#31096"
 msgid "Local subtitle available"
-msgstr "Staðvær þýðingartexti tiltækur"
+msgstr "Staðvær skjátexti tiltækur"
 
 msgctxt "#31097"
 msgid "Channel options"
@@ -447,6 +443,10 @@ msgstr "Stillingar sem tengjast aðalvalmynd: Stilltu upphafsskjáinn eins og þ
 msgctxt "#31131"
 msgid "Choose skin fanart pack"
 msgstr "Veldu pakka með aðdáendamyndum fyrir skinn"
+
+msgctxt "#31132"
+msgid "Select Program"
+msgstr "Veldu forrit"
 
 msgctxt "#31134"
 msgid "Remaining"

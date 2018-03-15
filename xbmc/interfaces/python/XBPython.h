@@ -2,7 +2,7 @@
 
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -69,10 +69,11 @@ public:
   XBPython();
   ~XBPython() override;
   void OnPlayBackEnded() override;
-  void OnPlayBackStarted() override;
+  void OnPlayBackStarted(const CFileItem &file) override;
   void OnPlayBackPaused() override;
   void OnPlayBackResumed() override;
   void OnPlayBackStopped() override;
+  void OnPlayBackError() override;
   void OnPlayBackSpeedChanged(int iSpeed) override;
   void OnPlayBackSeek(int64_t iTime, int64_t seekOffset) override;
   void OnPlayBackSeekChapter(int iChapter) override;

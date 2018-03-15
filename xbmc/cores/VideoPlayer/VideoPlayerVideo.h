@@ -2,7 +2,7 @@
 
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -32,14 +32,11 @@
 #include "utils/BitstreamStats.h"
 #include <atomic>
 
+#define DROP_DROPPED 1
+#define DROP_VERYLATE 2
+#define DROP_BUFFER_LEVEL 4
+
 class CDemuxStreamVideo;
-
-#define VIDEO_PICTURE_QUEUE_SIZE 1
-
-#define EOS_ABORT 1
-#define EOS_DROPPED 2
-#define EOS_VERYLATE 4
-#define EOS_BUFFER_LEVEL 8
 
 class CDroppingStats
 {
@@ -86,7 +83,6 @@ public:
   double GetOutputDelay() override; /* returns the expected delay, from that a packet is put in queue */
   std::string GetPlayerInfo() override;
   int GetVideoBitrate() override;
-  std::string GetStereoMode() override;
   void SetSpeed(int iSpeed) override;
 
   // classes
@@ -95,6 +91,14 @@ public:
 
 protected:
 
+  enum EOutputState
+  {
+    OUTPUT_NORMAL,
+    OUTPUT_ABORT,
+    OUTPUT_DROPPED,
+    OUTPUT_AGAIN
+  };
+
   void OnExit() override;
   void Process() override;
 
@@ -102,7 +106,7 @@ protected:
   void SendMessageBack(CDVDMsg* pMsg, int priority = 0);
   MsgQueueReturnCode GetMessage(CDVDMsg** pMsg, unsigned int iTimeoutInMilliSeconds, int &priority);
 
-  int OutputPicture(const VideoPicture* src);
+  EOutputState OutputPicture(const VideoPicture* src);
   void ProcessOverlays(const VideoPicture* pSource, double pts);
   void OpenStream(CDVDStreamInfo &hint, CDVDVideoCodec* codec);
 
@@ -146,4 +150,6 @@ protected:
   CDroppingStats m_droppingStats;
   CRenderManager& m_renderManager;
   VideoPicture m_picture;
+
+  EOutputState m_outputSate;
 };

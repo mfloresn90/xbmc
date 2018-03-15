@@ -1,7 +1,7 @@
 #pragma once
 /*
  *      Copyright (C) 2011-2013 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -118,8 +118,8 @@ public:
 private:
   // private construction, and no assignments; use the provided singleton methods
   CAddonInstaller();
-  CAddonInstaller(const CAddonInstaller&);
-  CAddonInstaller const& operator=(CAddonInstaller const&);
+  CAddonInstaller(const CAddonInstaller&) = delete;
+  CAddonInstaller const& operator=(CAddonInstaller const&) = delete;
   ~CAddonInstaller() override;
 
   /*! \brief Install an addon from a repository or zip

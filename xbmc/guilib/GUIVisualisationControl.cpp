@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -157,7 +157,7 @@ bool CGUIVisualisationControl::OnAction(const CAction &action)
 
 void CGUIVisualisationControl::Process(unsigned int currentTime, CDirtyRegionList &dirtyregions)
 {
-  if (g_application.m_pPlayer->IsPlayingAudio())
+  if (g_application.GetAppPlayer().IsPlayingAudio())
   {
     if (m_bInvalidated)
       FreeResources(true);
@@ -177,8 +177,11 @@ void CGUIVisualisationControl::Process(unsigned int currentTime, CDirtyRegionLis
         m_alreadyStarted = false;
       }
 
-      std::string strFile = URIUtils::GetFileName(g_application.CurrentFile());
-      m_alreadyStarted = m_instance->Start(m_channels, m_samplesPerSec, m_bitsPerSample, strFile);
+      std::string songTitle = URIUtils::GetFileName(g_application.CurrentFile());
+      const MUSIC_INFO::CMusicInfoTag* tag = g_infoManager.GetCurrentSongTag();
+      if (tag && !tag->GetTitle().empty())
+        songTitle = tag->GetTitle();
+      m_alreadyStarted = m_instance->Start(m_channels, m_samplesPerSec, m_bitsPerSample, songTitle);
       g_graphicsContext.ApplyStateBlock();
       m_callStart = false;
       m_updateTrack = true;

@@ -2,7 +2,7 @@
 
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -52,7 +52,8 @@ public:
   unsigned int AddPackets(const DVDAudioFrame &audioframe);
   double GetPlayingPts();
   double GetCacheTime();
-  double GetCacheTotal(); // returns total amount the audio device can buffer
+  double GetCacheTotal(); // returns total time a stream can buffer
+  double GetMaxDelay(); // returns total time of audio in AE for the stream
   double GetDelay(); // returns the time it takes to play a packet if we add one at this time
   double GetSyncError();
   void SetSyncErrorCorrection(double correction);
@@ -82,6 +83,7 @@ protected:
   double m_resampleRatio = 0.0; // invalid
   CCriticalSection m_critSection;
 
+  AEDataFormat m_dataFormat;
   unsigned int m_sampleRate;
   int m_iBitsPerSample;
   bool m_bPassthrough;

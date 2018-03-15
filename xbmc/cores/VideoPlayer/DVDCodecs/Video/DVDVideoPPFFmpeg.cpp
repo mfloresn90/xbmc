@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -96,7 +96,7 @@ void CDVDVideoPPFFmpeg::SetType(const std::string& mType, bool deinterlace)
 void CDVDVideoPPFFmpeg::Process(VideoPicture* pPicture)
 {
   VideoPicture* pSource = pPicture;
-  VideoPicture target;
+  CVideoBuffer *videoBuffer;
 
   if (pSource->videoBuffer->GetFormat() != AV_PIX_FMT_YUV420P)
     return;
@@ -107,31 +107,33 @@ void CDVDVideoPPFFmpeg::Process(VideoPicture* pPicture)
     return;
   }
 
-  target.videoBuffer = m_processInfo.GetVideoBufferManager().Get(AV_PIX_FMT_YUV420P, pPicture->iWidth * pPicture->iHeight * 3/2);
-  if (!target.videoBuffer)
-  {
-    return;
-  }
-
-  int pict_type = (pSource->qscale_type != DVP_QSCALE_MPEG1) ?
-                   PP_PICT_TYPE_QP2 : 0;
-
   uint8_t* srcPlanes[YuvImage::MAX_PLANES], *dstPlanes[YuvImage::MAX_PLANES];
   int srcStrides[YuvImage::MAX_PLANES];
   pSource->videoBuffer->GetPlanes(srcPlanes);
   pSource->videoBuffer->GetStrides(srcStrides);
-  target.videoBuffer->SetDimensions(pPicture->iWidth, pPicture->iHeight, srcStrides);
-  target.videoBuffer->GetPlanes(dstPlanes);
+
+  videoBuffer = m_processInfo.GetVideoBufferManager().Get(AV_PIX_FMT_YUV420P,
+                                                          srcStrides[0] * pPicture->iHeight +
+                                                          srcStrides[1] * pPicture->iHeight, nullptr);
+  if (!videoBuffer)
+  {
+    return;
+  }
+
+  videoBuffer->SetDimensions(pPicture->iWidth, pPicture->iHeight, srcStrides);
+  videoBuffer->GetPlanes(dstPlanes);
   pp_postprocess((const uint8_t **)srcPlanes, srcStrides,
                  dstPlanes, srcStrides,
                  pSource->iWidth, pSource->iHeight,
                  pSource->qp_table, pSource->qstride,
                  m_pMode, m_pContext,
-                 pict_type); //m_pSource->iFrameType);
+                 pSource->pict_type | pSource->qscale_type ? PP_PICT_TYPE_QP2 : 0);
 
 
   pPicture->SetParams(*pSource);
-  pPicture->videoBuffer = target.videoBuffer;
+  if (pPicture->videoBuffer)
+    pPicture->videoBuffer->Release();
+  pPicture->videoBuffer = videoBuffer;
 
   if (m_deinterlace)
     pPicture->iFlags &= ~DVP_FLAG_INTERLACED;

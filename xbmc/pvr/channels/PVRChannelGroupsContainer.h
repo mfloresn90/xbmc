@@ -1,7 +1,7 @@
 #pragma once
 /*
  *      Copyright (C) 2012-2013 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -207,8 +207,8 @@ namespace PVR
     CPVRChannelGroupPtr m_lastPlayedGroups[2]; /*!< used to store the last played groups */
 
   private :
-    CPVRChannelGroupsContainer& operator=(const CPVRChannelGroupsContainer&);
-    CPVRChannelGroupsContainer(const CPVRChannelGroupsContainer&);
+    CPVRChannelGroupsContainer& operator=(const CPVRChannelGroupsContainer&) = delete;
+    CPVRChannelGroupsContainer(const CPVRChannelGroupsContainer&) = delete;
 
     bool FilterDirectory(const CURL &url, CFileItemList &results) const;
 

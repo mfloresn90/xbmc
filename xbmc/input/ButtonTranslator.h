@@ -23,12 +23,9 @@
 #include <set>
 #include <string>
 
-#include "system.h" // for HAS_EVENT_SERVER
 #include "Action.h"
 
-#ifdef HAS_EVENT_SERVER
 #include "network/EventClient.h"
-#endif
 
 class CKey;
 class TiXmlNode;
@@ -41,9 +38,7 @@ class IWindowKeymap;
 /// Warning: _not_ threadsafe!
 class CButtonTranslator
 {
-#ifdef HAS_EVENT_SERVER
   friend class EVENTCLIENT::CEventButtonState;
-#endif
 
 public:
   CButtonTranslator();
@@ -76,12 +71,6 @@ public:
    */
   CAction GetAction(int window, const CKey &key, bool fallback = true);
 
-  /*! \brief Obtain the global action configured for a given key
-   \param key the key to query the action for
-   \return the global action
-   */
-  CAction GetGlobalAction(const CKey &key);
-
   void RegisterMapper(const std::string &device, IButtonMapper *mapper);
   void UnregisterMapper(IButtonMapper *mapper);
 
@@ -106,6 +95,8 @@ private:
   void MapAction(uint32_t buttonCode, const std::string &szAction, buttonMap &map);
 
   bool LoadKeymap(const std::string &keymapPath);
+
+  bool HasLongpressMapping_Internal(int window, const CKey &key);
 
   std::map<std::string, IButtonMapper*> m_buttonMappers;
 };

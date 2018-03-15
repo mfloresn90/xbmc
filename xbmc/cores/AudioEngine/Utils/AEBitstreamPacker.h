@@ -1,7 +1,7 @@
 #pragma once
 /*
  *      Copyright (C) 2010-2013 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -33,7 +33,7 @@ public:
   ~CAEBitstreamPacker();
 
   void Pack(CAEStreamInfo &info, uint8_t* data, int size);
-  void PackPause(CAEStreamInfo &info, unsigned int millis, bool iecBursts);
+  bool PackPause(CAEStreamInfo &info, unsigned int millis, bool iecBursts);
   void Reset();
   uint8_t* GetBuffer();
   unsigned int GetSize();

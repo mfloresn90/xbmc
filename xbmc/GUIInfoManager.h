@@ -1,14 +1,6 @@
-/*!
-\file GUIInfoManager.h
-\brief
-*/
-
-#ifndef GUIINFOMANAGER_H_
-#define GUIINFOMANAGER_H_
-
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -25,6 +17,7 @@
  *  <http://www.gnu.org/licenses/>.
  *
  */
+#pragma once
 
 #include "threads/CriticalSection.h"
 #include "guilib/IMsgTargetCallback.h"
@@ -88,8 +81,6 @@ private:
   int m_data2;
 };
 
-class CSetCurrentItemJob;
-
 /*!
  \ingroup strings
  \brief
@@ -97,8 +88,6 @@ class CSetCurrentItemJob;
 class CGUIInfoManager : public IMsgTargetCallback, public Observable,
                         public KODI::MESSAGING::IMessageTarget
 {
-friend CSetCurrentItemJob;
-
 public:
   CGUIInfoManager(void);
   ~CGUIInfoManager(void) override;
@@ -151,8 +140,9 @@ public:
   /*! \brief Set currently playing file item
    \param blocking whether to run in current thread (true) or background thread (false)
    */
-  void SetCurrentItem(const CFileItemPtr item);
+  void SetCurrentItem(const CFileItem &item);
   void ResetCurrentItem();
+  void UpdateInfo(const CFileItem &item);
   // Current song stuff
   /// \brief Retrieves tag info (if necessary) and fills in our current song path.
   void SetCurrentSong(CFileItem &item);
@@ -173,6 +163,7 @@ public:
   std::string GetMusicLabel(int item);
   std::string GetMusicTagLabel(int info, const CFileItem *item);
   std::string GetVideoLabel(int item);
+  std::string GetGameLabel(int item);
   std::string GetPlaylistLabel(int item, int playlistid = -1 /* PLAYLIST_NONE */) const;
   std::string GetMusicPartyModeLabel(int item);
   const std::string GetMusicPlaylistInfo(const GUIInfo& info);
@@ -185,6 +176,8 @@ public:
   int GetTotalPlayTime() const;
   float GetSeekPercent() const;
   std::string GetCurrentPlayTimeRemaining(TIME_FORMAT format) const;
+  int GetEpgEventProgress() const;
+  int GetEpgEventSeekPercent() const;
 
   bool GetDisplayAfterSeek();
   void SetDisplayAfterSeek(unsigned int timeOut = 2500, int seekOffset = 0);
@@ -284,14 +277,6 @@ protected:
   int AddMultiInfo(const GUIInfo &info);
   int AddListItemProp(const std::string &str, int offset=0);
 
-  /*!
-   * @brief Get the EPG tag that is currently active
-   * @return the currently active tag or NULL if no active tag was found
-   */
-  PVR::CPVREpgInfoTagPtr GetEpgInfoTag() const;
-
-  void SetCurrentItemJob(const CFileItemPtr item);
-
   // Conditional string parameters are stored here
   std::vector<std::string> m_stringParameters;
 
@@ -344,12 +329,13 @@ protected:
   //For checking visibility of custom nodes for a role.
   std::vector<std::pair<std::string, int>> m_libraryRoleCounts; 
 
-  SPlayerVideoStreamInfo m_videoInfo;
-  SPlayerAudioStreamInfo m_audioInfo;
+  VideoStreamInfo m_videoInfo;
+  AudioStreamInfo m_audioInfo;
 
   CCriticalSection m_critInfo;
 
 private:
+  static std::string GetEpgEventTitle(const PVR::CPVREpgInfoTagPtr& epgTag);
   static std::string FormatRatingAndVotes(float rating, int votes);
   bool IsPlayerChannelPreviewActive() const;
 };
@@ -359,8 +345,4 @@ private:
  \brief
  */
 extern CGUIInfoManager g_infoManager;
-#endif
-
-
-
 

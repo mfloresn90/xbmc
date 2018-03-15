@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -89,7 +89,7 @@ bool CEncoderFFmpeg::Init(AddonToKodiFuncTable_AudioEncoder& callbacks)
   }
 
   AddonPtr addon;
-  CAddonMgr::GetInstance().GetAddon(CServiceBroker::GetSettings().GetString(CSettings::SETTING_AUDIOCDS_ENCODER), addon);
+  CServiceBroker::GetAddonMgr().GetAddon(CServiceBroker::GetSettings().GetString(CSettings::SETTING_AUDIOCDS_ENCODER), addon);
   if (addon)
   {
     m_Format->bit_rate = (128+32*strtol(addon->GetSetting("bitrate").c_str(), NULL, 10))*1000;
@@ -120,8 +120,8 @@ bool CEncoderFFmpeg::Init(AddonToKodiFuncTable_AudioEncoder& callbacks)
 
   if(m_Format->oformat->flags & AVFMT_GLOBALHEADER)
   {
-    m_CodecCtx->flags |= CODEC_FLAG_GLOBAL_HEADER;
-    m_Format->flags   |= CODEC_FLAG_GLOBAL_HEADER;
+    m_CodecCtx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+    m_Format->flags   |= AV_CODEC_FLAG_GLOBAL_HEADER;
   }
 
   switch(m_iInBitsPerSample)

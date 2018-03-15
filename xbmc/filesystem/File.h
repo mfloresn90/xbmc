@@ -2,7 +2,7 @@
  *      Copyright (c) 2002 Frodo
  *      Portions Copyright (c) by the authors of ffmpeg and xvid
  *      Copyright (C) 2002-2013 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -32,6 +32,7 @@
 #include <iostream>
 #include <stdio.h>
 #include <string>
+#include <vector>
 #include "utils/auto_buffer.h"
 #include "IFileTypes.h"
 #include "PlatformDefs.h"
@@ -110,6 +111,7 @@ public:
   void Close();
   int GetChunkSize();
   const std::string GetProperty(XFILE::FileProperty type, const std::string &name = "") const;
+  const std::vector<std::string> GetPropertyValues(XFILE::FileProperty type, const std::string &name = "") const;
   ssize_t LoadFile(const std::string &filename, auto_buffer& outputBuffer);
 
 

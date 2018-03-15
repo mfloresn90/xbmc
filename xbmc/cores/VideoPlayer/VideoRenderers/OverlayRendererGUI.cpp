@@ -1,6 +1,6 @@
 /*
  *  Copyright (C) 2005-2013 Team XBMC
- *  http://xbmc.org
+ *  http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -70,7 +70,7 @@ CGUITextLayout* COverlayText::GetFontLayout(const std::string &font, int color, 
                                                     , style
                                                     , true, 1.0f, 1.0f, &pal, true);
     if (!subtitle_font || !border_font)
-      CLog::Log(LOGERROR, "CGUIWindowFullScreen::OnMessage(WINDOW_INIT) - Unable to load subtitle font");
+      CLog::Log(LOGERROR, "COverlayText::GetFontLayout - Unable to load subtitle font");
     else
       return new CGUITextLayout(subtitle_font, true, 0, border_font);
   }

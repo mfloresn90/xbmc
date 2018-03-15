@@ -2,7 +2,7 @@
 
 /*
  *      Copyright (C) 2012-2013 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -41,7 +41,6 @@ class IDemux;
 class CDVDInputStreamPVRManager
   : public CDVDInputStream
   , public CDVDInputStream::ITimes
-  , public CDVDInputStream::IDisplayTime
   , public CDVDInputStream::IDemux
 {
 public:
@@ -63,30 +62,12 @@ public:
   CDVDInputStream::ITimes* GetITimes() override { return this; }
   bool GetTimes(Times &times) override;
 
-  // deprecated
-  CDVDInputStream::IDisplayTime* GetIDisplayTime() override { return this; }
-  int GetTotalTime() override;
-  int GetTime() override;
-
-  bool CanRecord();
-  bool IsRecording();
-  void Record(bool bOnOff);
   bool CanSeek() override;
   bool CanPause() override;
   void Pause(bool bPaused);
 
   /* overloaded is streamtype to support m_pOtherStream */
   bool IsStreamType(DVDStreamType type) const;
-
-  /*! \brief Get the input format from the Backend
-   If it is empty ffmpeg scanning the stream to find the right input format.
-   See "xbmc/cores/VideoPlayer/Codecs/ffmpeg/libavformat/allformats.c" for a
-   list of the input formats.
-   \return The name of the input format
-   */
-  std::string GetInputFormat();
-
-  void ResetScanTimeout(unsigned int iTimeoutMs) override;
 
   // Demux interface
   CDVDInputStream::IDemux* GetIDemux() override;

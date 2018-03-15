@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -24,6 +24,7 @@
 
 #include "addons/AddonInstaller.h"
 #include "addons/AddonManager.h"
+#include "ServiceBroker.h"
 #include "filesystem/File.h"
 #include "interfaces/builtins/Builtins.h"
 #include "messaging/ApplicationMessenger.h"
@@ -77,7 +78,7 @@ void CRssManager::OnSettingAction(std::shared_ptr<const CSetting> setting)
   if (settingId == CSettings::SETTING_LOOKANDFEEL_RSSEDIT)
   {
     ADDON::AddonPtr addon;
-    if (!ADDON::CAddonMgr::GetInstance().GetAddon("script.rss.editor", addon))
+    if (!CServiceBroker::GetAddonMgr().GetAddon("script.rss.editor", addon))
     {
       if (!CAddonInstaller::GetInstance().InstallModal("script.rss.editor", addon))
         return;
@@ -105,8 +106,11 @@ void CRssManager::Stop()
 
 bool CRssManager::Load()
 {
+  const CProfilesManager &profileManager = CServiceBroker::GetProfileManager();
+
   CSingleLock lock(m_critical);
-  std::string rssXML = CProfilesManager::GetInstance().GetUserDataItem("RssFeeds.xml");
+
+  std::string rssXML = profileManager.GetUserDataItem("RssFeeds.xml");
   if (!CFile::Exists(rssXML))
     return false;
 

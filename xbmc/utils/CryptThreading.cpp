@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -32,16 +32,6 @@
 
 #ifdef HAVE_OPENSSL
 #include <openssl/crypto.h>
-#endif
-
-#ifdef HAVE_GCRYPT
-#include <gcrypt.h>
-#include <errno.h>
-
-#if GCRYPT_VERSION_NUMBER < 0x010600
-GCRY_THREAD_OPTION_PTHREAD_IMPL;
-#endif
-
 #endif
 
 /* ========================================================================= */
@@ -83,14 +73,6 @@ CryptThreadingInitializer::CryptThreadingInitializer()
   locks = new CCriticalSection*[numlocks];
   for (int i = 0; i < numlocks; i++)
     locks[i] = NULL;
-
-#ifdef HAVE_GCRYPT
-#if GCRYPT_VERSION_NUMBER < 0x010600
-  // set up gcrypt
-  gcry_control(GCRYCTL_SET_THREAD_CBS, &gcry_threads_pthread);
-  attemptedToSetSSLMTHook = true;
-#endif
-#endif
 
   if (!attemptedToSetSSLMTHook)
     CLog::Log(LOGWARNING, "Could not determine the libcurl security library to set the locking scheme. This may cause problem with multithreaded use of ssl or libraries that depend on it (libcurl).");

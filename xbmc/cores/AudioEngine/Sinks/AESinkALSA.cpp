@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2010-2013 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -17,8 +17,6 @@
  *  <http://www.gnu.org/licenses/>.
  *
  */
-#include "system.h"
-#ifdef HAS_ALSA
 
 #include <stdint.h>
 #include <limits.h>
@@ -29,6 +27,7 @@
 #include <algorithm>
 
 #include "AESinkALSA.h"
+#include "cores/AudioEngine/AESinkFactory.h"
 #include "cores/AudioEngine/Utils/AEUtil.h"
 #include "cores/AudioEngine/Utils/AEELDParser.h"
 #include "utils/log.h"
@@ -41,7 +40,11 @@
 #endif
 
 #ifdef TARGET_POSIX
-#include "linux/XTimeUtils.h"
+#include "platform/linux/XTimeUtils.h"
+#endif
+
+#if defined(TARGET_FREEBSD)
+#include "freebsd/FreeBSDGNUReplacements.h"
 #endif
 
 #define AE_MIN_PERIODSIZE 256
@@ -105,6 +108,26 @@ CAESinkALSA::CAESinkALSA() :
 CAESinkALSA::~CAESinkALSA()
 {
   Deinitialize();
+}
+
+void CAESinkALSA::Register()
+{
+  AE::AESinkRegEntry entry;
+  entry.sinkName = "ALSA";
+  entry.createFunc = CAESinkALSA::Create;
+  entry.enumerateFunc = CAESinkALSA::EnumerateDevicesEx;
+  entry.cleanupFunc = CAESinkALSA::Cleanup;
+  AE::CAESinkFactory::RegisterSink(entry);
+}
+
+IAESink* CAESinkALSA::Create(std::string &device, AEAudioFormat& desiredFormat)
+{
+  IAESink* sink = new CAESinkALSA();
+  if (sink->Initialize(desiredFormat, device))
+    return sink;
+
+  delete sink;
+  return nullptr;
 }
 
 inline CAEChannelInfo CAESinkALSA::GetChannelLayoutRaw(const AEAudioFormat& format)
@@ -904,9 +927,7 @@ void CAESinkALSA::GetDelay(AEDelayStatus& status)
 
   if (frames < 0)
   {
-#if SND_LIB_VERSION >= 0x000901 /* snd_pcm_forward() exists since 0.9.0rc8 */
     snd_pcm_forward(m_pcm, -frames);
-#endif
     frames = 0;
   }
 
@@ -1645,9 +1666,16 @@ void CAESinkALSA::sndLibErrorHandler(const char *file, int line, const char *fun
   va_end(arg);
 }
 
+void CAESinkALSA::Cleanup()
+{
+#if HAVE_LIBUDEV
+  m_deviceMonitor.Stop();
+#endif
+  m_controlMonitor.Clear();
+}
+
 #if HAVE_LIBUDEV
 CALSADeviceMonitor CAESinkALSA::m_deviceMonitor; // ARGH
 #endif
 CALSAHControlMonitor CAESinkALSA::m_controlMonitor; // ARGH
 
-#endif

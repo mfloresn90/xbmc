@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2010-2013 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -19,8 +19,9 @@
  */
 
 #include <cassert>
-#include "system.h"
 #include "AEPackIEC61937.h"
+
+#include <string.h>
 
 #define IEC61937_PREAMBLE1  0xF872
 #define IEC61937_PREAMBLE2  0x4E1F
@@ -239,7 +240,8 @@ int CAEPackIEC61937::PackPause(uint8_t *dest, unsigned int millis, unsigned int 
     memcpy(dest+i*periodInBytes, dest, periodInBytes);
   }
 
-  packet->m_data[1] = (gap & 0x00FF) << 8;
-  packet->m_data[0] = (gap & 0xFF00) >> 8;
+  uint16_t *gapPtr = reinterpret_cast<uint16_t*>(packet->m_data);
+  *gapPtr = gap;
+
   return periodsNeeded * periodInBytes;
 }

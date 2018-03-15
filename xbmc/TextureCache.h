@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -158,8 +158,8 @@ public:
 private:
   // private construction, and no assignments; use the provided singleton methods
   CTextureCache();
-  CTextureCache(const CTextureCache&);
-  CTextureCache const& operator=(CTextureCache const&);
+  CTextureCache(const CTextureCache&) = delete;
+  CTextureCache const& operator=(CTextureCache const&) = delete;
   ~CTextureCache() override;
 
   /*! \brief Check if the given image is a cached image

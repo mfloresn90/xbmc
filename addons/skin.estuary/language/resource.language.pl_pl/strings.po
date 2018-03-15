@@ -114,7 +114,7 @@ msgstr "Widok"
 
 msgctxt "#31024"
 msgid "Choose rating to display for media items"
-msgstr "Wybiec ocenę wyświetlaną z mediami"
+msgstr "Wybierz ocenę wyświetlaną z mediami"
 
 msgctxt "#31025"
 msgid "No favourites found. You can add any item from media views to this list by using the context menu."
@@ -199,10 +199,6 @@ msgstr "Dostępne"
 msgctxt "#31050"
 msgid "Press [B]OK[/B] to stop"
 msgstr "Naciśnij [B]OK[/B], aby zatrzymać"
-
-msgctxt "#31051"
-msgid "Toggle language"
-msgstr "Przełącz język"
 
 msgctxt "#31052"
 msgid "filtered"
@@ -447,6 +443,10 @@ msgstr "Umożliwia dostosowanie menu startowego do własnych upodobań."
 msgctxt "#31131"
 msgid "Choose skin fanart pack"
 msgstr "Wybierz pakiet fototapet skóry"
+
+msgctxt "#31132"
+msgid "Select Program"
+msgstr "Wybierz program"
 
 msgctxt "#31134"
 msgid "Remaining"

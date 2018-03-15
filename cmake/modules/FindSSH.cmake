@@ -15,7 +15,7 @@
 #   SSH::SSH   - The SSH library
 
 if(PKG_CONFIG_FOUND)
-  pkg_check_modules(PC_SSH libssh QUIET)
+  pkg_check_modules(PC_SSH libssh>=0.6 QUIET)
 endif()
 
 find_path(SSH_INCLUDE_DIR NAMES libssh/libssh.h
@@ -33,14 +33,14 @@ find_package_handle_standard_args(SSH
 if(SSH_FOUND)
   set(SSH_LIBRARIES ${SSH_LIBRARY})
   set(SSH_INCLUDE_DIRS ${SSH_INCLUDE_DIR})
-  set(SSH_DEFINITIONS -DHAVE_LIBSSH=1)
+  set(SSH_DEFINITIONS -DHAS_FILESYSTEM_SFTP=1)
 
   if(NOT TARGET SSH::SSH)
     add_library(SSH::SSH UNKNOWN IMPORTED)
     set_target_properties(SSH::SSH PROPERTIES
                                    IMPORTED_LOCATION "${SSH_LIBRARY}"
                                    INTERFACE_INCLUDE_DIRECTORIES "${SSH_INCLUDE_DIR}"
-                                   INTERFACE_COMPILE_DEFINITIONS HAVE_LIBSSH=1)
+                                   INTERFACE_COMPILE_DEFINITIONS HAS_FILESYSTEM_SFTP=1)
   endif()
 endif()
 

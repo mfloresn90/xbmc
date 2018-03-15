@@ -2,7 +2,7 @@
  *      Copyright (c) 2002 Frodo
  *      Portions Copyright (c) by the authors of ffmpeg and xvid
  *      Copyright (C) 2002-2013 Team XBMC
- *      http://xbmc.org
+ *      http://kodi.tv
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -27,6 +27,7 @@
 #include "DirectoryCache.h"
 #include "Directory.h"
 #include "FileCache.h"
+#include "system.h"
 #include "utils/log.h"
 #include "utils/URIUtils.h"
 #include "utils/BitstreamStats.h"
@@ -141,8 +142,8 @@ bool CFile::Copy(const CURL& url2, const CURL& dest, XFILE::IFileCallback* pCall
     auto_buffer buffer(iBufferSize);
     ssize_t iRead, iWrite;
 
-    UINT64 llFileSize = file.GetLength();
-    UINT64 llPos = 0;
+    unsigned long long llFileSize = file.GetLength();
+    unsigned long long llPos = 0;
 
     CStopWatch timer;
     timer.StartZero();
@@ -955,6 +956,15 @@ const std::string CFile::GetProperty(XFILE::FileProperty type, const std::string
   if (!m_pFile)
     return "";
   return m_pFile->GetProperty(type, name);
+}
+
+const std::vector<std::string> CFile::GetPropertyValues(XFILE::FileProperty type, const std::string &name) const
+{
+  if (!m_pFile)
+  {
+    return std::vector<std::string>();
+  }
+  return m_pFile->GetPropertyValues(type, name);
 }
 
 ssize_t CFile::LoadFile(const std::string &filename, auto_buffer& outputBuffer)
