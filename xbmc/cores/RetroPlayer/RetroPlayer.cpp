@@ -40,6 +40,7 @@
 #include "games/tags/GameInfoTag.h"
 #include "games/GameServices.h"
 #include "games/GameUtils.h"
+#include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
 #include "guilib/LocalizeStrings.h"
 #include "guilib/WindowIDs.h"
@@ -187,6 +188,7 @@ bool CRetroPlayer::OpenFile(const CFileItem& file, const CPlayerOptions& options
     RegisterWindowCallbacks();
     SetSpeedInternal(1.0);
     m_callback.OnPlayBackStarted(fileCopy);
+    m_callback.OnAVStarted(fileCopy);
     if (!bStandalone)
       m_autoSave.reset(new CRetroPlayerAutoSave(*m_gameClient));
     m_processInfo->SetVideoFps(static_cast<float>(m_gameClient->Timing().GetFrameRate()));
@@ -460,7 +462,7 @@ void CRetroPlayer::FrameMove()
 
   if (m_gameClient)
   {
-    const int activeId = g_windowManager.GetActiveWindowOrDialog();
+    const int activeId = CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindowOrDialog();
     const bool bFullscreen = (activeId == WINDOW_FULLSCREEN_GAME);
 
     switch (m_state)
@@ -564,7 +566,7 @@ void CRetroPlayer::OnSpeedChange(double newSpeed)
 
 void CRetroPlayer::CloseOSD()
 {
-  g_windowManager.CloseDialogs(true);
+  CServiceBroker::GetGUI()->GetWindowManager().CloseDialogs(true);
 }
 
 void CRetroPlayer::RegisterWindowCallbacks()

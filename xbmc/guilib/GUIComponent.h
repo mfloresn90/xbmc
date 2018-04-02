@@ -20,29 +20,21 @@
 
 #pragma once
 
-#include "EGL/egl.h"
+#include <memory>
+#include <string>
 
-class CGLContextEGL
+class CGUIWindowManager;
+
+class CGUIComponent
 {
 public:
-  CGLContextEGL();
-  virtual ~CGLContextEGL();
+  CGUIComponent();
+  virtual ~CGUIComponent();
 
-  bool CreateDisplay(EGLDisplay display,
-                     EGLint renderable_type,
-                     EGLint rendering_api);
+  CGUIWindowManager& GetWindowManager();
 
-  bool CreateSurface(EGLNativeWindowType surface);
-  bool CreateContext();
-  bool BindContext();
-  bool SurfaceAttrib();
-  void Destroy();
-  void Detach();
-  bool SetVSync(bool enable);
-  void SwapBuffers();
+  bool ConfirmDelete(std::string path);
 
-  EGLDisplay m_eglDisplay;
-  EGLSurface m_eglSurface;
-  EGLContext m_eglContext;
-  EGLConfig m_eglConfig;
+protected:
+  std::unique_ptr<CGUIWindowManager> m_pWindowManager;
 };
