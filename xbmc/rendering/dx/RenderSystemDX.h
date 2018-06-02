@@ -26,10 +26,10 @@
 #include "DeviceResources.h"
 #include "threads/Condition.h"
 #include "threads/CriticalSection.h"
+#include "utils/Color.h"
 #include "rendering/RenderSystem.h"
 
 #include <vector>
-#include <wrl.h>
 #include <wrl/client.h>
 
 enum PCI_Vendors
@@ -56,7 +56,7 @@ public:
   bool BeginRender() override;
   bool EndRender() override;
   void PresentRender(bool rendered, bool videoLayer) override;
-  bool ClearBuffers(color_t color) override;
+  bool ClearBuffers(UTILS::Color color) override;
   void SetViewPort(const CRect& viewPort) override;
   void GetViewPort(CRect& viewPort) override;
   void RestoreViewPort() override;
@@ -85,8 +85,9 @@ public:
   CD3DTexture* GetBackBuffer();
 
   void FlushGPU() const;
+  void RequestDecodingTime();
+  void ReleaseDecodingTime();
   void SetAlphaBlendEnable(bool enable);
-  HANDLE GetContexMutex() const;
 
   // empty overrides
   bool IsExtSupported(const char* extension) const override { return false; };
@@ -125,6 +126,9 @@ protected:
   Microsoft::WRL::ComPtr<ID3D11RasterizerState> m_RSScissorEnable;
   // stereo interlaced/checkerboard intermediate target
   CD3DTexture m_rightEyeTex;
+
+  XbmcThreads::EndTime m_decodingTimer;
+  XbmcThreads::ConditionVariable m_decodingEvent;
 
   std::shared_ptr<DX::DeviceResources> m_deviceResources;
 };

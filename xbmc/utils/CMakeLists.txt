@@ -15,6 +15,7 @@ set(SOURCES ActorProtocol.cpp
             Crc32.cpp
             CryptThreading.cpp
             DatabaseUtils.cpp
+            Digest.cpp
             EndianSwap.cpp
             EmbeddedArt.cpp
             FileExtensionProvider.cpp
@@ -37,7 +38,6 @@ set(SOURCES ActorProtocol.cpp
             LegacyPathTranslation.cpp
             Locale.cpp
             log.cpp
-            md5.cpp
             Mime.cpp
             Observer.cpp
             POUtils.cpp
@@ -87,9 +87,11 @@ set(HEADERS ActorProtocol.h
             CharsetConverter.h
             CharsetDetection.h
             CPUInfo.h
+            Color.h
             Crc32.h
             CryptThreading.h
             DatabaseUtils.h
+            Digest.h
             EndianSwap.h
             EventStream.h
             EventStreamDetail.h
@@ -123,7 +125,6 @@ set(HEADERS ActorProtocol.h
             Locale.h
             log.h
             MathUtils.h
-            md5.h
             Mime.h
             Observer.h
             params_check_macros.h
@@ -152,6 +153,7 @@ set(HEADERS ActorProtocol.h
             Temperature.h
             TextSearch.h
             TimeUtils.h
+            TransformMatrix.h
             URIUtils.h
             UrlOptions.h
             Utf8Utils.h

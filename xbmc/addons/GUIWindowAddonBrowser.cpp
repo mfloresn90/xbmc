@@ -40,6 +40,7 @@
 #include "messaging/helpers/DialogHelper.h"
 #include "settings/Settings.h"
 #include "settings/MediaSourceSettings.h"
+#include "threads/IRunnable.h"
 #include "utils/StringUtils.h"
 #include "utils/Variant.h"
 #include "AddonDatabase.h"
@@ -211,7 +212,7 @@ bool CGUIWindowAddonBrowser::OnClick(int iItem, const std::string &player)
   if (item->GetPath() == "addons://update_all/")
   {
     UpdateAddons updater;
-    CGUIDialogBusy::Wait(&updater);
+    CGUIDialogBusy::Wait(&updater, 100, true);
     return true;
   }
   if (!item->m_bIsFolder)

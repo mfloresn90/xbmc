@@ -60,7 +60,7 @@
 #endif
 #include "profiles/ProfilesManager.h"
 #include "utils/RegExp.h"
-#include "guilib/GraphicContext.h"
+#include "windowing/GraphicContext.h"
 #include "guilib/TextureManager.h"
 #include "utils/fstrcmp.h"
 #include "storage/MediaManager.h"
@@ -80,8 +80,8 @@
 #ifdef HAS_IRSERVERSUITE
 #endif
 #include "guilib/LocalizeStrings.h"
+#include "utils/Digest.h"
 #include "utils/FileExtensionProvider.h"
-#include "utils/md5.h"
 #include "utils/TimeUtils.h"
 #include "utils/URIUtils.h"
 #include "utils/log.h"
@@ -104,6 +104,7 @@ using namespace MEDIA_DETECT;
 
 using namespace XFILE;
 using namespace PLAYLIST;
+using KODI::UTILITY::CDigest;
 
 #if !defined(TARGET_WINDOWS)
 unsigned int CUtil::s_randomSeed = time(NULL);
@@ -594,22 +595,22 @@ int CUtil::GetDVDIfoTitle(const std::string& strFile)
   return atoi(strFilename.substr(4, 2).c_str());
 }
 
-std::string CUtil::GetFileMD5(const std::string& strPath)
+std::string CUtil::GetFileDigest(const std::string& strPath, KODI::UTILITY::CDigest::Type type)
 {
   CFile file;
   std::string result;
   if (file.Open(strPath))
   {
-    XBMC::XBMC_MD5 md5;
+    CDigest digest{type};
     char temp[1024];
     while (true)
     {
       ssize_t read = file.Read(temp,1024);
       if (read <= 0)
         break;
-      md5.append(temp,read);
+      digest.Update(temp,read);
     }
-    result = md5.getDigest();
+    result = digest.Finalize();
     file.Close();
   }
 
@@ -686,7 +687,7 @@ void CUtil::ClearSubtitles()
 {
   //delete cached subs
   CFileItemList items;
-  CDirectory::GetDirectory("special://temp/",items);
+  CDirectory::GetDirectory("special://temp/",items, "", DIR_FLAG_DEFAULTS);
   for( int i=0;i<items.Size();++i)
   {
     if (!items[i]->m_bIsFolder)
@@ -1549,7 +1550,7 @@ bool CUtil::SupportsReadFileOperations(const std::string& strPath)
 
 std::string CUtil::GetDefaultFolderThumb(const std::string &folderThumb)
 {
-  if (g_TextureManager.HasTexture(folderThumb))
+  if (CServiceBroker::GetGUI()->GetTextureManager().HasTexture(folderThumb))
     return folderThumb;
   return "";
 }
@@ -1558,9 +1559,9 @@ void CUtil::GetSkinThemes(std::vector<std::string>& vecTheme)
 {
   static const std::string TexturesXbt = "Textures.xbt";
 
-  std::string strPath = URIUtils::AddFileToFolder(g_graphicsContext.GetMediaDir(), "media");
+  std::string strPath = URIUtils::AddFileToFolder(CServiceBroker::GetWinSystem()->GetGfxContext().GetMediaDir(), "media");
   CFileItemList items;
-  CDirectory::GetDirectory(strPath, items);
+  CDirectory::GetDirectory(strPath, items, "", DIR_FLAG_DEFAULTS);
   // Search for Themes in the Current skin!
   for (int i = 0; i < items.Size(); ++i)
   {

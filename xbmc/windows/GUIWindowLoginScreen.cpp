@@ -27,9 +27,9 @@
 #include "ServiceBroker.h"
 #include "addons/AddonManager.h"
 #include "addons/Skin.h"
-#include "cores/AudioEngine/Engines/ActiveAE/AudioDSPAddons/ActiveAEDSP.h"
 #include "dialogs/GUIDialogContextMenu.h"
 #include "favourites/FavouritesService.h"
+#include "guilib/GUIComponent.h"
 #include "guilib/GUIMessage.h"
 #include "guilib/GUIWindowManager.h"
 #include "guilib/LocalizeStrings.h"
@@ -164,7 +164,7 @@ bool CGUIWindowLoginScreen::OnBack(int actionID)
 
 void CGUIWindowLoginScreen::FrameMove()
 {
-  if (GetFocusedControlID() == CONTROL_BIG_LIST && !CServiceBroker::GetGUI()->GetWindowManager().HasModalDialog())
+  if (GetFocusedControlID() == CONTROL_BIG_LIST && !CServiceBroker::GetGUI()->GetWindowManager().HasModalDialog(true))
   {
     if (m_viewControl.HasControl(CONTROL_BIG_LIST))
       m_iSelectedItem = m_viewControl.GetSelectedItem();
@@ -354,7 +354,7 @@ void CGUIWindowLoginScreen::LoadProfile(unsigned int profile)
   CServiceBroker::GetGUI()->GetWindowManager().ChangeActiveWindow(firstWindow);
 
   g_application.UpdateLibraries();
-  CStereoscopicsManager::GetInstance().Initialize();
+  CServiceBroker::GetGUI()->GetStereoscopicsManager().Initialize();
 
   // if the user interfaces has been fully initialized let everyone know
   if (uiInitializationFinished)

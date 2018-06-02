@@ -22,6 +22,7 @@
 
 #include "system_gl.h"
 #include "rendering/RenderSystem.h"
+#include "utils/Color.h"
 #include "GLESShader.h"
 
 enum ESHADERMETHOD
@@ -53,7 +54,7 @@ public:
   bool BeginRender() override;
   bool EndRender() override;
   void PresentRender(bool rendered, bool videoLayer) override;
-  bool ClearBuffers(color_t color) override;
+  bool ClearBuffers(UTILS::Color color) override;
   bool IsExtSupported(const char* extension) const override;
 
   void SetVSync(bool vsync);
@@ -82,7 +83,8 @@ public:
 
   std::string GetShaderPath(const std::string &filename) override { return "GLES/2.0/"; }
 
-  void InitialiseShader();
+  void InitialiseShaders();
+  void ReleaseShaders();
   void EnableGUIShader(ESHADERMETHOD method);
   void DisableGUIShader();
 

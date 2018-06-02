@@ -64,7 +64,6 @@ if(NOT WIN32)
   option(WITH_CPU               "build with given cpu" OFF)
 endif()
 if(CORE_SYSTEM_NAME STREQUAL linux)
-  option(ENABLE_LIRC            "Enable LIRC support?" ON)
   option(ENABLE_EVENTCLIENTS    "Enable event clients support?" OFF)
 endif()
 
@@ -110,7 +109,8 @@ foreach(depspec ${PLATFORM_REQUIRED_DEPS})
 endforeach()
 
 # Required dependencies. Keep in alphabetical order please
-set(required_deps Cdio
+set(required_deps ASS
+                  Cdio
                   Cpluff
                   CrossGUID
                   Curl
@@ -147,8 +147,10 @@ set(optional_deps Alsa
                   Bluetooth
                   CAP
                   CCache
+                  CEC
                   DBus
                   LCMS2
+                  LircClient
                   MDNS
                   MicroHttpd
                   PulseAudio
@@ -160,12 +162,8 @@ set(optional_deps Alsa
                   XSLT
                   ${PLATFORM_OPTIONAL_DEPS})
 
-# Required, dyloaded deps. Keep in alphabetical order please
-set(required_dyload ASS)
-
 # Optional, dyloaded deps. Keep in alphabetical order please
 set(dyload_optional Bluray
-                    CEC
                     NFS
                     Plist)
 
@@ -175,7 +173,6 @@ find_package(JsonSchemaBuilder REQUIRED)
 
 core_require_dep(${required_deps})
 core_optional_dep(${optional_deps})
-core_require_dyload_dep(${required_dyload})
 core_optional_dyload_dep(${dyload_optional})
 
 if(ENABLE_MARIADBCLIENT AND NOT ENABLE_MARIADBCLIENT STREQUAL AUTO AND ENABLE_MYSQLCLIENT AND NOT ENABLE_MYSQLCLIENT STREQUAL AUTO)
@@ -199,11 +196,6 @@ endif()
 
 if(ENABLE_OPTICAL)
   list(APPEND DEP_DEFINES -DHAS_DVD_DRIVE -DHAS_CDDA_RIPPER)
-endif()
-
-if(ENABLE_LIRC)
-  set(LIRC_DEVICE /dev/lircd CACHE STRING "LIRC device to use")
-  list(APPEND DEP_DEFINES -DLIRC_DEVICE="${LIRC_DEVICE}" -DHAS_LIRC=1)
 endif()
 
 if(ENABLE_AIRTUNES)

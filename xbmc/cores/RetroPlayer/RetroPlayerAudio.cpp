@@ -90,7 +90,7 @@ bool CRetroPlayerAudio::OpenPCMStream(AEDataFormat format, unsigned int samplera
   audioFormat.m_dataFormat = format;
   audioFormat.m_sampleRate = samplerate;
   audioFormat.m_channelLayout = channelLayout;
-  m_pAudioStream = CServiceBroker::GetActiveAE().MakeStream(audioFormat);
+  m_pAudioStream = CServiceBroker::GetActiveAE()->MakeStream(audioFormat);
 
   if (!m_pAudioStream)
   {
@@ -112,14 +112,14 @@ bool CRetroPlayerAudio::OpenEncodedStream(AVCodecID codec, unsigned int samplera
   return true; //! @todo
 }
 
-void CRetroPlayerAudio::AddData(const uint8_t* data, unsigned int size)
+void CRetroPlayerAudio::AddData(const uint8_t* data, size_t size)
 {
   if (m_bAudioEnabled)
   {
     if (m_pAudioStream)
     {
-      const unsigned int frameSize = m_pAudioStream->GetChannelCount() * (CAEUtil::DataFormatToBits(m_pAudioStream->GetDataFormat()) >> 3);
-      m_pAudioStream->AddData(&data, 0, size / frameSize);
+      const size_t frameSize = m_pAudioStream->GetChannelCount() * (CAEUtil::DataFormatToBits(m_pAudioStream->GetDataFormat()) >> 3);
+      m_pAudioStream->AddData(&data, 0, static_cast<unsigned int>(size / frameSize));
     }
   }
 }
@@ -130,7 +130,7 @@ void CRetroPlayerAudio::CloseStream()
   {
     CLog::Log(LOGDEBUG, "RetroPlayer[AUDIO]: Closing audio stream");
 
-    CServiceBroker::GetActiveAE().FreeStream(m_pAudioStream);
+    CServiceBroker::GetActiveAE()->FreeStream(m_pAudioStream);
     m_pAudioStream = nullptr;
   }
 }

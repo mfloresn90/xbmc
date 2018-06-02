@@ -20,7 +20,6 @@
  */
 
 #include <memory>
-#include <vector>
 
 #include "utils/Observer.h"
 #include "windows/GUIMediaWindow.h"
@@ -98,14 +97,14 @@ namespace PVR
      * @brief Get the channel group for this window.
      * @return the group or null, if no group set.
      */
-   virtual CPVRChannelGroupPtr GetChannelGroup(void);
+   CPVRChannelGroupPtr GetChannelGroup(void);
 
     /*!
      * @brief Set a new channel group, start listening to this group, optionally update window content.
      * @param group The new group.
      * @param bUpdate if true, window content will be updated.
      */
-    void SetChannelGroup(const CPVRChannelGroupPtr &group, bool bUpdate = true);
+    void SetChannelGroup(CPVRChannelGroupPtr &&group, bool bUpdate = true);
 
     virtual void UpdateSelectedItemPath();
 

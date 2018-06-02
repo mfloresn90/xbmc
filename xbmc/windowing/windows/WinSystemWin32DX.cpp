@@ -18,13 +18,16 @@
  *
  */
 
+#include "WinSystemWin32DX.h"
 #include "commons/ilog.h"
-#include "guilib/GraphicContext.h"
+#include "platform/win32/CharsetConverter.h"
 #include "rendering/dx/RenderContext.h"
+#include "settings/DisplaySettings.h"
+#include "settings/Settings.h"
 #include "utils/SystemInfo.h"
 #include "utils/log.h"
-#include "WinSystemWin32DX.h"
-#include "platform/win32/CharsetConverter.h"
+#include "windowing/GraphicContext.h"
+
 #include "system.h"
 
 #ifndef _M_X64
@@ -80,13 +83,14 @@ void CWinSystemWin32DX::PresentRenderImpl(bool rendered)
 
 bool CWinSystemWin32DX::CreateNewWindow(const std::string& name, bool fullScreen, RESOLUTION_INFO& res)
 {
-  const MONITOR_DETAILS* monitor = GetMonitor(res.iScreen);
+  const MONITOR_DETAILS* monitor = GetDisplayDetails(CServiceBroker::GetSettings().GetString(CSettings::SETTING_VIDEOSCREEN_MONITOR));
   if (!monitor)
     return false;
 
+  m_hMonitor = monitor->hMonitor;
   m_deviceResources = DX::DeviceResources::Get();
   // setting monitor before creating window for proper hooking into a driver
-  m_deviceResources->SetMonitor(monitor->hMonitor);
+  m_deviceResources->SetMonitor(m_hMonitor);
 
   return CWinSystemWin32::CreateNewWindow(name, fullScreen, res) && m_deviceResources->HasValidDevice();
 }
@@ -103,13 +107,6 @@ bool CWinSystemWin32DX::DestroyRenderSystem()
   m_deviceResources->Release();
   m_deviceResources.reset();
   return true;
-}
-
-void CWinSystemWin32DX::UpdateMonitor() const
-{
-  const MONITOR_DETAILS* monitor = GetMonitor(m_nScreen);
-  if (monitor)
-    m_deviceResources->SetMonitor(monitor->hMonitor);
 }
 
 void CWinSystemWin32DX::SetDeviceFullScreen(bool fullScreen, RESOLUTION_INFO& res)
@@ -133,11 +130,12 @@ void CWinSystemWin32DX::OnMove(int x, int y)
     return;
 
   HMONITOR newMonitor = MonitorFromWindow(m_hWnd, MONITOR_DEFAULTTONEAREST);
-  const MONITOR_DETAILS* monitor = GetMonitor(m_nScreen);
-  if (newMonitor != monitor->hMonitor)
+  if (newMonitor != m_hMonitor)
   {
+    MONITOR_DETAILS* details = GetDisplayDetails(newMonitor);
+    CDisplaySettings::GetInstance().SetMonitor(KODI::PLATFORM::WINDOWS::FromW(details->MonitorNameW));
     m_deviceResources->SetMonitor(newMonitor);
-    m_nScreen = GetCurrentScreen();
+    m_hMonitor = newMonitor;
   }
 }
 
@@ -170,14 +168,9 @@ bool CWinSystemWin32DX::IsStereoEnabled()
   return m_deviceResources->IsStereoEnabled();
 }
 
-void CWinSystemWin32DX::OnScreenChange(int screen)
+void CWinSystemWin32DX::OnScreenChange(HMONITOR monitor)
 {
-  const MONITOR_DETAILS* new_monitor = GetMonitor(screen);
-  const MONITOR_DETAILS* old_monitor = GetMonitor(m_nScreen);
-  if (old_monitor->hMonitor != new_monitor->hMonitor)
-  {
-    m_deviceResources->SetMonitor(new_monitor->hMonitor);
-  }
+  m_deviceResources->SetMonitor(monitor);
 }
 
 bool CWinSystemWin32DX::ChangeResolution(const RESOLUTION_INFO &res, bool forceChange)
@@ -194,7 +187,7 @@ void CWinSystemWin32DX::OnResize(int width, int height)
   if (!m_IsAlteringWindow)
     ReleaseBackBuffer();
 
-  m_deviceResources->SetLogicalSize(width, height);
+  m_deviceResources->SetLogicalSize(static_cast<float>(width), static_cast<float>(height));
 
   if (!m_IsAlteringWindow)
     CreateBackBuffer();
@@ -330,7 +323,7 @@ void CWinSystemWin32DX::FixRefreshRateIfNecessary(const D3D10DDIARG_CREATERESOUR
         refreshRate /= 2;
 
       uint32_t refreshNum, refreshDen;
-      DX::GetRefreshRatio(floor(m_fRefreshRate), &refreshNum, &refreshDen);
+      DX::GetRefreshRatio(static_cast<uint32_t>(floor(m_fRefreshRate)), &refreshNum, &refreshDen);
       float diff = fabs(refreshRate - static_cast<float>(refreshNum) / static_cast<float>(refreshDen)) / refreshRate;
       CLog::LogF(LOGDEBUG, "refreshRate: %0.4f, desired: %0.4f, deviation: %.5f, fixRequired: %s, %d",
         refreshRate, m_fRefreshRate, diff, (diff > 0.0005 && diff < 0.1) ? "yes" : "no", pResource->pPrimaryDesc->Flags);
@@ -350,7 +343,7 @@ void APIENTRY HookCreateResource(D3D10DDI_HDEVICE hDevice, const D3D10DDIARG_CRE
 {
   if (pResource && pResource->pPrimaryDesc)
   {
-    DX::Windowing().FixRefreshRateIfNecessary(pResource);
+    DX::Windowing()->FixRefreshRateIfNecessary(pResource);
   }
   s_fnCreateResourceOrig(hDevice, pResource, hResource, hRtResource);
 }

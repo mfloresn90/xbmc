@@ -24,23 +24,29 @@
 #include "ServiceBroker.h"
 #include "utils/log.h"
 #include "rendering/RenderSystem.h"
-#include "guilib/GraphicContext.h"
+#include "windowing/GraphicContext.h"
 #include "guilib/MatrixGLES.h"
 
 using namespace Shaders;
 
-CGLShader::CGLShader(const char *shader) : CGLSLShaderProgram("gl_shader_vert.glsl", shader)
+CGLShader::CGLShader(const char *shader, std::string prefix)
 {
   m_proj = nullptr;
   m_model  = nullptr;
   m_clipPossible = false;
+
+  VertexShader()->LoadSource("gl_shader_vert.glsl");
+  PixelShader()->LoadSource(shader, prefix);
 }
 
-CGLShader::CGLShader(const char *vshader, const char *fshader) : CGLSLShaderProgram(vshader, fshader)
+CGLShader::CGLShader(const char *vshader, const char *fshader, std::string prefix)
 {
   m_proj = nullptr;
   m_model  = nullptr;
   m_clipPossible = false;
+
+  VertexShader()->LoadSource(vshader, prefix);
+  PixelShader()->LoadSource(fshader, prefix);
 }
 
 void CGLShader::OnCompiledAndLinked()
@@ -80,9 +86,9 @@ bool CGLShader::OnEnabled()
   glUniformMatrix4fv(m_hProj,  1, GL_FALSE, projMatrix);
   glUniformMatrix4fv(m_hModel, 1, GL_FALSE, modelMatrix);
 
-  const TransformMatrix &guiMatrix = g_graphicsContext.GetGUIMatrix();
+  const TransformMatrix &guiMatrix = CServiceBroker::GetWinSystem()->GetGfxContext().GetGUIMatrix();
   CRect viewPort; // absolute positions of corners
-  CServiceBroker::GetRenderSystem().GetViewPort(viewPort);
+  CServiceBroker::GetRenderSystem()->GetViewPort(viewPort);
 
   /* glScissor operates in window coordinates. In order that we can use it to
    * perform clipping, we must ensure that there is an independent linear

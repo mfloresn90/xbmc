@@ -21,7 +21,6 @@
 #ifndef WIN_SYSTEM_WIN10_DX_H
 #define WIN_SYSTEM_WIN10_DX_H
 
-#include "utils/GlobalsHandling.h"
 #include "WinSystemWin10.h"
 #include "rendering/dx/RenderSystemDX.h"
 
@@ -38,7 +37,6 @@ public:
   bool SetFullScreen(bool fullScreen, RESOLUTION_INFO& res, bool blankOtherDisplays) override;
   void PresentRenderImpl(bool rendered) override;
   bool DPIChanged(WORD dpi, RECT windowRect) const override;
-  void SetWindow(HWND hWnd) const;
   bool DestroyRenderSystem() override;
 
   void UninitHooks();
@@ -46,8 +44,8 @@ public:
 
   void OnMove(int x, int y) override;
   void OnResize(int width, int height);
-  Windows::Foundation::Size GetOutputSize() { return m_deviceResources->GetOutputSize(); };
-  void TrimDevice() { m_deviceResources->Trim(); };
+  winrt::Windows::Foundation::Size GetOutputSize() const { return m_deviceResources->GetOutputSize(); }
+  void TrimDevice() const { m_deviceResources->Trim(); }
 
   /*!
   \brief Register as a dependent of the DirectX Render System
@@ -77,7 +75,6 @@ public:
   void ShowSplash(const std::string& message) override;
 
 protected:
-  void UpdateMonitor() const;
   void SetDeviceFullScreen(bool fullScreen, RESOLUTION_INFO& res) override;
   void ReleaseBackBuffer() override;
   void CreateBackBuffer() override;

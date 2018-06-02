@@ -255,6 +255,7 @@ void CAdvancedSettings::Initialize()
 
   m_remoteDelay = 3;
   m_controllerDeadzone = 0.2f;
+  m_bScanIRServer = true;
 
   m_playlistAsFolders = true;
   m_detectAsUdf = false;
@@ -273,6 +274,8 @@ void CAdvancedSettings::Initialize()
 
   m_musicThumbs = "folder.jpg|Folder.jpg|folder.JPG|Folder.JPG|cover.jpg|Cover.jpg|cover.jpeg|thumb.jpg|Thumb.jpg|thumb.JPG|Thumb.JPG";
   m_fanartImages = "fanart.jpg|fanart.png";
+  m_musicArtistExtraArt = { };
+  m_musicAlbumExtraArt = {};
 
   m_bMusicLibraryAllItemsOnBottom = false;
   m_bMusicLibraryCleanOnUpdate = false;
@@ -395,6 +398,7 @@ void CAdvancedSettings::Initialize()
   m_stereoscopicregex_tab = "[-. _]h?tab[-. _]";
 
   m_useDisplayControlHWStereo = false;
+  m_allowUseSeparateDeviceForDecoding = false;
 
   m_videoAssFixedWorks = false;
 
@@ -454,7 +458,7 @@ void CAdvancedSettings::ParseSettingsFile(const std::string &file)
   //Make a copy of the AS.xml and hide advancedsettings passwords
   CXBMCTinyXML advancedXMLCopy(advancedXML);
   TiXmlNode *pRootElementCopy = advancedXMLCopy.RootElement();
-  for (const auto& dbname : { "videodatabase", "musicdatabase", "tvdatabase", "adspdatabase", "epgdatabase" })
+  for (const auto& dbname : { "videodatabase", "musicdatabase", "tvdatabase", "epgdatabase" })
   {
     TiXmlNode *db = pRootElementCopy->FirstChild(dbname);
     if (db)
@@ -680,6 +684,7 @@ void CAdvancedSettings::ParseSettingsFile(const std::string &file)
     XMLUtils::GetBoolean(pElement,"forcedxvarenderer", m_DXVAForceProcessorRenderer);
     XMLUtils::GetBoolean(pElement, "dxvaallowhqscaling", m_DXVAAllowHqScaling);
     XMLUtils::GetBoolean(pElement, "usedisplaycontrolhwstereo", m_useDisplayControlHWStereo);
+    XMLUtils::GetBoolean(pElement, "allowdiscretedecoder", m_allowUseSeparateDeviceForDecoding);
     //0 = disable fps detect, 1 = only detect on timestamps with uniform spacing, 2 detect on all timestamps
     XMLUtils::GetInt(pElement, "fpsdetect", m_videoFpsDetect, 0, 2);
     XMLUtils::GetFloat(pElement, "maxtempo", m_maxTempo, 1.5, 2.1);
@@ -745,6 +750,32 @@ void CAdvancedSettings::ParseSettingsFile(const std::string &file)
         if (separator->FirstChild())
           m_musicArtistSeparators.push_back(separator->FirstChild()->ValueStr());
         separator = separator->NextSibling("separator");
+      }
+    }
+    // Music extra artist art
+    TiXmlElement* arttypes = pElement->FirstChildElement("artistextraart");
+    if (arttypes)
+    {
+      m_musicArtistExtraArt.clear();
+      TiXmlNode* arttype = arttypes->FirstChild("arttype");
+      while (arttype)
+      {
+        if (arttype->FirstChild())
+          m_musicArtistExtraArt.push_back(arttype->FirstChild()->ValueStr());
+        arttype = arttype->NextSibling("arttype");
+      }
+    }
+    // Music extra album art
+    arttypes = pElement->FirstChildElement("albumextraart");
+    if (arttypes)
+    {
+      m_musicAlbumExtraArt.clear();
+      TiXmlNode* arttype = arttypes->FirstChild("arttype");
+      while (arttype)
+      {
+        if (arttype->FirstChild())
+          m_musicAlbumExtraArt.push_back(arttype->FirstChild()->ValueStr());
+        arttype = arttype->NextSibling("arttype");
       }
     }
   }
@@ -1011,6 +1042,8 @@ void CAdvancedSettings::ParseSettingsFile(const std::string &file)
 
   XMLUtils::GetInt(pRootElement, "remotedelay", m_remoteDelay, 0, 20);
   XMLUtils::GetFloat(pRootElement, "controllerdeadzone", m_controllerDeadzone, 0.0f, 1.0f);
+  XMLUtils::GetBoolean(pRootElement, "scanirserver", m_bScanIRServer);
+
   XMLUtils::GetUInt(pRootElement, "fanartres", m_fanartRes, 0, 9999);
   XMLUtils::GetUInt(pRootElement, "imageres", m_imageRes, 0, 9999);
   if (XMLUtils::GetString(pRootElement, "imagescalingalgorithm", tmp))
@@ -1123,22 +1156,6 @@ void CAdvancedSettings::ParseSettingsFile(const std::string &file)
     XMLUtils::GetString(pDatabase, "capath", m_databaseTV.capath);
     XMLUtils::GetString(pDatabase, "ciphers", m_databaseTV.ciphers);
     XMLUtils::GetBoolean(pDatabase, "compression", m_databaseTV.compression);
-  }
-
-  pDatabase = pRootElement->FirstChildElement("adspdatabase");
-  if (pDatabase)
-  {
-    XMLUtils::GetString(pDatabase, "type", m_databaseADSP.type);
-    XMLUtils::GetString(pDatabase, "host", m_databaseADSP.host);
-    XMLUtils::GetString(pDatabase, "port", m_databaseADSP.port);
-    XMLUtils::GetString(pDatabase, "user", m_databaseADSP.user);
-    XMLUtils::GetString(pDatabase, "pass", m_databaseADSP.pass);
-    XMLUtils::GetString(pDatabase, "name", m_databaseADSP.name);
-    XMLUtils::GetString(pDatabase, "key", m_databaseADSP.key);
-    XMLUtils::GetString(pDatabase, "cert", m_databaseADSP.cert);
-    XMLUtils::GetString(pDatabase, "ca", m_databaseADSP.ca);
-    XMLUtils::GetString(pDatabase, "capath", m_databaseADSP.capath);
-    XMLUtils::GetString(pDatabase, "ciphers", m_databaseADSP.ciphers);
   }
 
   pDatabase = pRootElement->FirstChildElement("epgdatabase");
@@ -1391,6 +1408,7 @@ void CAdvancedSettings::SettingOptionsLoggingComponentsFiller(SettingConstPtr se
   list.push_back(std::make_pair(g_localizeStrings.Get(676), LOGAUDIO));
   list.push_back(std::make_pair(g_localizeStrings.Get(680), LOGVIDEO));
   list.push_back(std::make_pair(g_localizeStrings.Get(683), LOGAVTIMING));
+  list.push_back(std::make_pair(g_localizeStrings.Get(684), LOGWINDOWING));
 #ifdef HAS_DBUS
   list.push_back(std::make_pair(g_localizeStrings.Get(674), LOGDBUS));
 #endif

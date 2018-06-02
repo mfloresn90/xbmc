@@ -23,6 +23,7 @@
 #include "system_gl.h"
 #include "GLShader.h"
 #include "rendering/RenderSystem.h"
+#include "utils/Color.h"
 
 enum ESHADERMETHOD
 {
@@ -47,7 +48,7 @@ public:
   bool BeginRender() override;
   bool EndRender() override;
   void PresentRender(bool rendered, bool videoLayer) override;
-  bool ClearBuffers(color_t color) override;
+  bool ClearBuffers(UTILS::Color color) override;
   bool IsExtSupported(const char* extension) const override;
 
   void SetVSync(bool vsync);
@@ -97,7 +98,8 @@ protected:
   virtual void SetVSyncImpl(bool enable) = 0;
   virtual void PresentRenderImpl(bool rendered) = 0;
   void CalculateMaxTexturesize();
-  void InitialiseShader();
+  void InitialiseShaders();
+  void ReleaseShaders();
 
   bool m_bVsyncInit = false;
   int m_width;
